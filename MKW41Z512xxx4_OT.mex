@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding= "UTF-8" ?>
+<configuration name="MKW41Z512xxx4" version="1.3" xsi:schemaLocation="http://mcuxpresso.nxp.com/XSD/mex_configuration_1.3 http://mcuxpresso.nxp.com/XSD/mex_configuration_1.3.xsd" uuid="6649fc85-a2ac-492c-a053-32a2f88bdd18" xmlns="http://mcuxpresso.nxp.com/XSD/mex_configuration_1.3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+   <common>
+      <processor>MKW41Z512xxx4</processor>
+      <package>MKW41Z512VHT4</package>
+      <board></board>
+      <mcu_data>ksdk2_0</mcu_data>
+      <cores selected="core0">
+         <core name="Cortex-M0P" id="core0" description="M0P core"/>
+      </cores>
+      <description>Configuration imported from MKW41Z512xxx4_OT</description>
+   </common>
+   <preferences>
+      <validate_boot_init_only>true</validate_boot_init_only>
+   </preferences>
+   <tools>
+      <pins name="Pins" version="4.0" update_project_code="true">
+         <pins_profile>
+            <processor_version>3.0.1</processor_version>
+         </pins_profile>
+         <functions_list>
+            <function name="BOARD_InitPins">
+               <description>Configures pin routing and optionally pin electrical features.&amp;lt;br/&amp;gt;</description>
+               <options>
+                  <callFromInitBoot>true</callFromInitBoot>
+                  <coreID>core0</coreID>
+                  <enableClock>true</enableClock>
+               </options>
+               <dependencies>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.common" description="Pins initialization requires the COMMON Driver in the project." problem_level="2" source="Pins.BOARD_InitPins">
+                     <feature name="enabled" evaluation="equal" configuration="core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.port" description="Pins initialization requires the PORT Driver in the project." problem_level="2" source="Pins.BOARD_InitPins">
+                     <feature name="enabled" evaluation="equal" configuration="core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+               </dependencies>
+               <pins>
+                  <pin peripheral="LPUART0" signal="RX" pin_num="42" pin_signal="TSI0_CH2/PTC6/LLWU_P14/XTAL_OUT_EN/I2C1_SCL/UART0_RX/TPM2_CH0/BSM_FRAME"/>
+                  <pin peripheral="LPUART0" signal="TX" pin_num="43" pin_signal="TSI0_CH3/PTC7/LLWU_P15/SPI0_PCS2/I2C1_SDA/UART0_TX/TPM2_CH1/BSM_DATA"/>
+               </pins>
+            </function>
+         </functions_list>
+      </pins>
+      <clocks name="Clocks" version="4.0" update_project_code="true">
+         <clocks_profile>
+            <processor_version>3.0.1</processor_version>
+         </clocks_profile>
+         <clock_configurations>
+            <clock_configuration name="BOARD_BootClockRUN">
+               <description></description>
+               <options/>
+               <dependencies>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.common" description="Clocks initialization requires the COMMON Driver in the project." problem_level="2" source="Clocks.BOARD_BootClockRUN">
+                     <feature name="enabled" evaluation="equal" configuration="core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+               </dependencies>
+               <clock_sources/>
+               <clock_outputs>
+                  <clock_output id="Bus_clock.outFreq" value="10.48576 MHz" locked="false" accuracy=""/>
+                  <clock_output id="Core_clock.outFreq" value="20.97152 MHz" locked="false" accuracy=""/>
+                  <clock_output id="Flash_clock.outFreq" value="10.48576 MHz" locked="false" accuracy=""/>
+                  <clock_output id="LPO_clock.outFreq" value="1 kHz" locked="false" accuracy=""/>
+                  <clock_output id="MCGFLLCLK.outFreq" value="20.97152 MHz" locked="false" accuracy=""/>
+                  <clock_output id="System_clock.outFreq" value="20.97152 MHz" locked="false" accuracy=""/>
+               </clock_outputs>
+               <clock_settings/>
+               <called_from_default_init>true</called_from_default_init>
+            </clock_configuration>
+         </clock_configurations>
+      </clocks>
+   </tools>
+</configuration>
