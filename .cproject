@@ -248,6 +248,9 @@
 								<option id="com.crt.advproject.link.cpp.multicore.empty.1531018255" name="No Multicore options for this project" superClass="com.crt.advproject.link.cpp.multicore.empty"/>
 								<option id="com.crt.advproject.link.cpp.config.1115042722" name="Obsolete (Config)" superClass="com.crt.advproject.link.cpp.config"/>
 								<option id="com.crt.advproject.link.cpp.store.1176745677" name="Obsolete (Store)" superClass="com.crt.advproject.link.cpp.store"/>
+								<option id="com.crt.advproject.link.memory.load.image.cpp.1546931634" name="Plain load image" superClass="com.crt.advproject.link.memory.load.image.cpp" value="" valueType="string"/>
+								<option id="com.crt.advproject.link.memory.data.cpp.475648896" name="Global data placement" superClass="com.crt.advproject.link.memory.data.cpp" value="" valueType="string"/>
+								<option id="com.crt.advproject.link.memory.sections.cpp.128570860" name="Extra linker script input sections" superClass="com.crt.advproject.link.memory.sections.cpp" valueType="stringList"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.82197689" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
@@ -300,6 +303,7 @@
 								<option id="com.crt.advproject.link.config.124971137" name="Obsolete (Config)" superClass="com.crt.advproject.link.config"/>
 								<option id="com.crt.advproject.link.store.702650842" name="Obsolete (Store)" superClass="com.crt.advproject.link.store"/>
 							</tool>
+							<tool id="com.crt.advproject.tool.debug.debug.1480369018" name="MCU Debugger" superClass="com.crt.advproject.tool.debug.debug"/>
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
@@ -310,7 +314,7 @@
 						<entry flags="LOCAL|VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="drivers"/>
 						<entry excluding="heap_1.c|heap_2.c|heap_3.c|heap_5.c" flags="LOCAL|VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="freertos"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="openthread"/>
-						<entry flags="LOCAL|VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="source"/>
+						<entry excluding="SEGGER_RTT/RTT_Syscalls_GCC.c" flags="LOCAL|VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="source"/>
 						<entry flags="LOCAL|VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="startup"/>
 						<entry flags="LOCAL|VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="utilities"/>
 					</sourceEntries>
@@ -572,6 +576,9 @@
 								<option id="com.crt.advproject.link.cpp.multicore.empty.692521241" name="No Multicore options for this project" superClass="com.crt.advproject.link.cpp.multicore.empty" useByScannerDiscovery="false"/>
 								<option id="com.crt.advproject.link.cpp.config.474776143" name="Obsolete (Config)" superClass="com.crt.advproject.link.cpp.config" useByScannerDiscovery="false"/>
 								<option id="com.crt.advproject.link.cpp.store.1882458506" name="Obsolete (Store)" superClass="com.crt.advproject.link.cpp.store" useByScannerDiscovery="false"/>
+								<option id="com.crt.advproject.link.memory.load.image.cpp.366894503" name="Plain load image" superClass="com.crt.advproject.link.memory.load.image.cpp" value="" valueType="string"/>
+								<option id="com.crt.advproject.link.memory.data.cpp.1853017588" name="Global data placement" superClass="com.crt.advproject.link.memory.data.cpp" value="" valueType="string"/>
+								<option id="com.crt.advproject.link.memory.sections.cpp.733080195" name="Extra linker script input sections" superClass="com.crt.advproject.link.memory.sections.cpp" valueType="stringList"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.1475897120" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
@@ -624,6 +631,7 @@
 								<option id="com.crt.advproject.link.config.1507485672" name="Obsolete (Config)" superClass="com.crt.advproject.link.config"/>
 								<option id="com.crt.advproject.link.store.1004299831" name="Obsolete (Store)" superClass="com.crt.advproject.link.store"/>
 							</tool>
+							<tool id="com.crt.advproject.tool.debug.release.1430909711" name="MCU Debugger" superClass="com.crt.advproject.tool.debug.release"/>
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
@@ -634,7 +642,7 @@
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="drivers"/>
 						<entry excluding="heap_5.c|heap_3.c|heap_2.c|heap_1.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="freertos"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="openthread"/>
-						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="source"/>
+						<entry excluding="SEGGER_RTT/RTT_Syscalls_GCC.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="source"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="startup"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="utilities"/>
 					</sourceEntries>
@@ -671,15 +679,18 @@
 	<storageModule moduleId="com.crt.config">
 		<projectStorage>&lt;?xml version="1.0" encoding="UTF-8"?&gt;&#13;
 &lt;TargetConfig&gt;&#13;
-&lt;Properties property_3="NXP" property_4="MKW41Z512xxx4" property_count="5" version="70200"/&gt;&#13;
-&lt;infoList vendor="NXP"&gt;&lt;info chip="MKW41Z512xxx4" name="MKW41Z512xxx4"&gt;&lt;chip&gt;&lt;name&gt;MKW41Z512xxx4&lt;/name&gt;&#13;
+&lt;Properties property_3="NXP" property_4="MKW41Z512xxx4" property_count="5" version="100200"/&gt;&#13;
+&lt;infoList vendor="NXP"&gt;&#13;
+&lt;info chip="MKW41Z512xxx4" name="MKW41Z512xxx4"&gt;&#13;
+&lt;chip&gt;&#13;
+&lt;name&gt;MKW41Z512xxx4&lt;/name&gt;&#13;
 &lt;family&gt;KW4x&lt;/family&gt;&#13;
 &lt;vendor&gt;NXP&lt;/vendor&gt;&#13;
 &lt;memory can_program="true" id="Flash" is_ro="true" size="0" type="Flash"/&gt;&#13;
 &lt;memory id="RAM" size="0" type="RAM"/&gt;&#13;
 &lt;memoryInstance derived_from="Flash" driver="FTFA_2K.cfx" id="PROGRAM_FLASH" location="0x0" size="0x80000"/&gt;&#13;
 &lt;memoryInstance derived_from="RAM" id="SRAM" location="0x1fff8000" size="0x20000"/&gt;&#13;
-&lt;peripheralInstance derived_from="FTFA_FlashConfig" id="FTFA_FlashConfig" location="0x400"/&gt;&#13;
+&lt;peripheralInstance derived_from="FTFA-FlashConfig" id="FTFA-FlashConfig" location="0x400"/&gt;&#13;
 &lt;peripheralInstance derived_from="DMA" id="DMA" location="0x40008000"/&gt;&#13;
 &lt;peripheralInstance derived_from="FTFA" id="FTFA" location="0x40020000"/&gt;&#13;
 &lt;peripheralInstance derived_from="DMAMUX0" id="DMAMUX0" location="0x40021000"/&gt;&#13;
@@ -704,16 +715,16 @@
 &lt;peripheralInstance derived_from="LTC0" id="LTC0" location="0x40058000"/&gt;&#13;
 &lt;peripheralInstance derived_from="RSIM" id="RSIM" location="0x40059000"/&gt;&#13;
 &lt;peripheralInstance derived_from="DCDC" id="DCDC" location="0x4005A000"/&gt;&#13;
-&lt;peripheralInstance derived_from="BTLE_RF" id="BTLE_RF" location="0x4005B000"/&gt;&#13;
-&lt;peripheralInstance derived_from="XCVR_RX_DIG" id="XCVR_RX_DIG" location="0x4005C000"/&gt;&#13;
-&lt;peripheralInstance derived_from="XCVR_TX_DIG" id="XCVR_TX_DIG" location="0x4005C200"/&gt;&#13;
-&lt;peripheralInstance derived_from="XCVR_PLL_DIG" id="XCVR_PLL_DIG" location="0x4005C224"/&gt;&#13;
-&lt;peripheralInstance derived_from="XCVR_MISC" id="XCVR_MISC" location="0x4005C280"/&gt;&#13;
-&lt;peripheralInstance derived_from="XCVR_TSM" id="XCVR_TSM" location="0x4005C2C0"/&gt;&#13;
-&lt;peripheralInstance derived_from="XCVR_PHY" id="XCVR_PHY" location="0x4005C400"/&gt;&#13;
-&lt;peripheralInstance derived_from="XCVR_ZBDEM" id="XCVR_ZBDEM" location="0x4005C480"/&gt;&#13;
-&lt;peripheralInstance derived_from="XCVR_ANA" id="XCVR_ANA" location="0x4005C500"/&gt;&#13;
-&lt;peripheralInstance derived_from="XCVR_PKT_RAM" id="XCVR_PKT_RAM" location="0x4005C700"/&gt;&#13;
+&lt;peripheralInstance derived_from="BTLE-RF" id="BTLE-RF" location="0x4005B000"/&gt;&#13;
+&lt;peripheralInstance derived_from="XCVR-RX-DIG" id="XCVR-RX-DIG" location="0x4005C000"/&gt;&#13;
+&lt;peripheralInstance derived_from="XCVR-TX-DIG" id="XCVR-TX-DIG" location="0x4005C200"/&gt;&#13;
+&lt;peripheralInstance derived_from="XCVR-PLL-DIG" id="XCVR-PLL-DIG" location="0x4005C224"/&gt;&#13;
+&lt;peripheralInstance derived_from="XCVR-MISC" id="XCVR-MISC" location="0x4005C280"/&gt;&#13;
+&lt;peripheralInstance derived_from="XCVR-TSM" id="XCVR-TSM" location="0x4005C2C0"/&gt;&#13;
+&lt;peripheralInstance derived_from="XCVR-PHY" id="XCVR-PHY" location="0x4005C400"/&gt;&#13;
+&lt;peripheralInstance derived_from="XCVR-ZBDEM" id="XCVR-ZBDEM" location="0x4005C480"/&gt;&#13;
+&lt;peripheralInstance derived_from="XCVR-ANA" id="XCVR-ANA" location="0x4005C500"/&gt;&#13;
+&lt;peripheralInstance derived_from="XCVR-PKT-RAM" id="XCVR-PKT-RAM" location="0x4005C700"/&gt;&#13;
 &lt;peripheralInstance derived_from="ZLL" id="ZLL" location="0x4005D000"/&gt;&#13;
 &lt;peripheralInstance derived_from="ANT" id="ANT" location="0x4005E000"/&gt;&#13;
 &lt;peripheralInstance derived_from="GENFSK" id="GENFSK" location="0x4005F000"/&gt;&#13;
@@ -741,7 +752,8 @@
 &lt;peripheralInstance derived_from="FGPIOB" id="FGPIOB" location="0xF8000040"/&gt;&#13;
 &lt;peripheralInstance derived_from="FGPIOC" id="FGPIOC" location="0xF8000080"/&gt;&#13;
 &lt;/chip&gt;&#13;
-&lt;processor&gt;&lt;name gcc_name="cortex-m0plus"&gt;Cortex-M0+&lt;/name&gt;&#13;
+&lt;processor&gt;&#13;
+&lt;name gcc_name="cortex-m0plus"&gt;Cortex-M0+&lt;/name&gt;&#13;
 &lt;family&gt;Cortex-M&lt;/family&gt;&#13;
 &lt;/processor&gt;&#13;
 &lt;link href="MKW41Z4_internal_peripheral.xml" show="embed" type="simple"/&gt;&#13;
