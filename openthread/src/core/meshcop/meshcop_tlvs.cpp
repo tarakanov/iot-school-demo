@@ -113,5 +113,49 @@ void SteeringDataTlv::ComputeBloomFilter(const otExtAddress &aJoinerId)
     SetBit(ansi.Get() % GetNumBits());
 }
 
+const ChannelMaskEntryBase *ChannelMaskEntryBase::GetNext(const Tlv *aChannelMaskBaseTlv) const
+{
+    const uint8_t *entry = reinterpret_cast<const uint8_t *>(this) + GetSize();
+    const uint8_t *end   = aChannelMaskBaseTlv->GetValue() + aChannelMaskBaseTlv->GetSize();
+
+    return (entry < end) ? reinterpret_cast<const ChannelMaskEntryBase *>(entry) : NULL;
+}
+
+const ChannelMaskEntryBase *ChannelMaskBaseTlv::GetFirstEntry(void) const
+{
+    const ChannelMaskEntryBase *entry = NULL;
+
+    VerifyOrExit(GetLength() >= sizeof(ChannelMaskEntryBase));
+
+    entry = reinterpret_cast<const ChannelMaskEntryBase *>(GetValue());
+    VerifyOrExit(GetLength() >= entry->GetSize(), entry = NULL);
+
+exit:
+    return entry;
+}
+
+const ChannelMaskEntry *ChannelMaskBaseTlv::GetMaskEntry(uint8_t aChannelPage) const
+{
+    const ChannelMaskEntry *pageEntry = NULL;
+
+    for (const ChannelMaskEntryBase *entry = GetFirstEntry(); entry != NULL; entry = entry->GetNext(this))
+    {
+        if (entry->GetChannelPage() == aChannelPage)
+        {
+            pageEntry = static_cast<const ChannelMaskEntry *>(entry);
+
+            if (pageEntry->IsValid())
+            {
+                ExitNow();
+            }
+        }
+    }
+
+    pageEntry = NULL;
+
+exit:
+    return pageEntry;
+}
+
 } // namespace MeshCoP
 } // namespace ot

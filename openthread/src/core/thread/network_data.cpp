@@ -37,7 +37,7 @@
 
 #include <openthread/platform/random.h>
 
-#include "coap/coap_header.hpp"
+#include "coap/coap_message.hpp"
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
 #include "common/instance.hpp"
@@ -50,9 +50,9 @@
 namespace ot {
 namespace NetworkData {
 
-NetworkData::NetworkData(Instance &aInstance, bool aLocal)
+NetworkData::NetworkData(Instance &aInstance, Type aType)
     : InstanceLocator(aInstance)
-    , mLocal(aLocal)
+    , mType(aType)
     , mLastAttemptWait(false)
     , mLastAttempt(0)
 {
@@ -566,7 +566,7 @@ void NetworkData::RemoveTemporaryData(uint8_t *aData, uint8_t &aDataLength)
                 continue;
             }
 
-            otDumpDebgNetData(GetInstance(), "remove prefix done", mTlvs, mLength);
+            otDumpDebgNetData("remove prefix done", mTlvs, mLength);
             break;
         }
 
@@ -587,7 +587,7 @@ void NetworkData::RemoveTemporaryData(uint8_t *aData, uint8_t &aDataLength)
                 continue;
             }
 
-            otDumpDebgNetData(GetInstance(), "remove service done", mTlvs, mLength);
+            otDumpDebgNetData("remove service done", mTlvs, mLength);
             break;
         }
 
@@ -613,7 +613,7 @@ void NetworkData::RemoveTemporaryData(uint8_t *aData, uint8_t &aDataLength)
         cur = cur->GetNext();
     }
 
-    otDumpDebgNetData(GetInstance(), "remove done", aData, aDataLength);
+    otDumpDebgNetData("remove done", aData, aDataLength);
 }
 
 void NetworkData::RemoveTemporaryData(uint8_t *aData, uint8_t &aDataLength, PrefixTlv &aPrefix)
@@ -878,9 +878,9 @@ PrefixTlv *NetworkData::FindPrefix(const uint8_t *aPrefix, uint8_t aPrefixLength
 
 PrefixTlv *NetworkData::FindPrefix(const uint8_t *aPrefix, uint8_t aPrefixLength, uint8_t *aTlvs, uint8_t aTlvsLength)
 {
-    NetworkDataTlv *cur = reinterpret_cast<NetworkDataTlv *>(aTlvs);
-    NetworkDataTlv *end = reinterpret_cast<NetworkDataTlv *>(aTlvs + aTlvsLength);
-    PrefixTlv *     compare;
+    NetworkDataTlv *cur     = reinterpret_cast<NetworkDataTlv *>(aTlvs);
+    NetworkDataTlv *end     = reinterpret_cast<NetworkDataTlv *>(aTlvs + aTlvsLength);
+    PrefixTlv *     compare = NULL;
 
     while (cur < end)
     {
@@ -893,15 +893,17 @@ PrefixTlv *NetworkData::FindPrefix(const uint8_t *aPrefix, uint8_t aPrefixLength
             if (compare->GetPrefixLength() == aPrefixLength &&
                 PrefixMatch(compare->GetPrefix(), aPrefix, aPrefixLength) >= aPrefixLength)
             {
-                return compare;
+                ExitNow();
             }
         }
 
         cur = cur->GetNext();
     }
 
+    compare = NULL;
+
 exit:
-    return NULL;
+    return compare;
 }
 
 int8_t NetworkData::PrefixMatch(const uint8_t *a, const uint8_t *b, uint8_t aLength)
@@ -947,9 +949,9 @@ ServiceTlv *NetworkData::FindService(uint32_t       aEnterpriseNumber,
                                      uint8_t *      aTlvs,
                                      uint8_t        aTlvsLength)
 {
-    NetworkDataTlv *cur = reinterpret_cast<NetworkDataTlv *>(aTlvs);
-    NetworkDataTlv *end = reinterpret_cast<NetworkDataTlv *>(aTlvs + aTlvsLength);
-    ServiceTlv *    compare;
+    NetworkDataTlv *cur     = reinterpret_cast<NetworkDataTlv *>(aTlvs);
+    NetworkDataTlv *end     = reinterpret_cast<NetworkDataTlv *>(aTlvs + aTlvsLength);
+    ServiceTlv *    compare = NULL;
 
     while (cur < end)
     {
@@ -963,53 +965,52 @@ ServiceTlv *NetworkData::FindService(uint32_t       aEnterpriseNumber,
                 (compare->GetServiceDataLength() == aServiceDataLength) &&
                 (memcmp(compare->GetServiceData(), aServiceData, aServiceDataLength) == 0))
             {
-                return compare;
+                ExitNow();
             }
         }
 
         cur = cur->GetNext();
     }
 
+    compare = NULL;
+
 exit:
-    return NULL;
+    return compare;
 }
 #endif
 
-otError NetworkData::Insert(uint8_t *aStart, uint8_t aLength)
+void NetworkData::Insert(uint8_t *aStart, uint8_t aLength)
 {
     assert(aLength + mLength <= sizeof(mTlvs) && mTlvs <= aStart && aStart <= mTlvs + mLength);
     memmove(aStart + aLength, aStart, mLength - static_cast<size_t>(aStart - mTlvs));
     mLength += aLength;
-    return OT_ERROR_NONE;
 }
 
-otError NetworkData::Remove(uint8_t *aStart, uint8_t aLength)
+void NetworkData::Remove(uint8_t *aStart, uint8_t aLength)
 {
     assert(aLength <= mLength && mTlvs <= aStart && (aStart - mTlvs) + aLength <= mLength);
     memmove(aStart, aStart + aLength, mLength - (static_cast<size_t>(aStart - mTlvs) + aLength));
     mLength -= aLength;
-    return OT_ERROR_NONE;
 }
 
 otError NetworkData::SendServerDataNotification(uint16_t aRloc16)
 {
-    ThreadNetif &    netif = GetNetif();
-    otError          error = OT_ERROR_NONE;
-    Coap::Header     header;
-    Message *        message = NULL;
+    ThreadNetif &    netif   = GetNetif();
+    otError          error   = OT_ERROR_NONE;
+    Coap::Message *  message = NULL;
     Ip6::MessageInfo messageInfo;
 
     VerifyOrExit(!mLastAttemptWait || static_cast<int32_t>(TimerMilli::GetNow() - mLastAttempt) < kDataResubmitDelay,
                  error = OT_ERROR_ALREADY);
 
-    header.Init(OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST);
-    header.SetToken(Coap::Header::kDefaultTokenLength);
-    header.AppendUriPathOptions(OT_URI_PATH_SERVER_DATA);
-    header.SetPayloadMarker();
+    VerifyOrExit((message = netif.GetCoap().NewMessage()) != NULL, error = OT_ERROR_NO_BUFS);
 
-    VerifyOrExit((message = netif.GetCoap().NewMessage(header)) != NULL, error = OT_ERROR_NO_BUFS);
+    message->Init(OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST);
+    message->SetToken(Coap::Message::kDefaultTokenLength);
+    message->AppendUriPathOptions(OT_URI_PATH_SERVER_DATA);
+    message->SetPayloadMarker();
 
-    if (mLocal)
+    if (mType == kTypeLocal)
     {
         ThreadTlv tlv;
         tlv.SetType(ThreadTlv::kThreadNetworkData);
@@ -1031,13 +1032,13 @@ otError NetworkData::SendServerDataNotification(uint16_t aRloc16)
     messageInfo.SetPeerPort(kCoapUdpPort);
     SuccessOrExit(error = netif.GetCoap().SendMessage(*message, messageInfo));
 
-    if (mLocal)
+    if (mType == kTypeLocal)
     {
         mLastAttempt     = TimerMilli::GetNow();
         mLastAttemptWait = true;
     }
 
-    otLogInfoNetData(GetInstance(), "Sent server data notification");
+    otLogInfoNetData("Sent server data notification");
 
 exit:
 

@@ -36,7 +36,8 @@
 
 #include "openthread-core-config.h"
 
-#include <openthread/types.h>
+#include <openthread/border_router.h>
+#include <openthread/server.h>
 
 #include "coap/coap.hpp"
 #include "common/locator.hpp"
@@ -95,13 +96,23 @@ public:
     };
 
     /**
+     * This enumeration specifies the type of Network Data (local or leader).
+     *
+     */
+    enum Type
+    {
+        kTypeLocal,  ///< Local Network Data.
+        kTypeLeader, ///< Leader Network Data.
+    };
+
+    /**
      * This constructor initializes the object.
      *
      * @param[in]  aInstance     A reference to the OpenThread instance.
-     * @param[in]  aLocal        TRUE if this represents local network data, FALSE otherwise.
+     * @param[in]  aType         Network data type
      *
      */
-    NetworkData(Instance &aInstance, bool aLocal);
+    NetworkData(Instance &aInstance, Type aType);
 
     /**
      * This method clears the network data.
@@ -388,11 +399,8 @@ protected:
      * @param[in]  aStart   A pointer to the beginning of the insertion.
      * @param[in]  aLength  The number of bytes to insert.
      *
-     * @retval OT_ERROR_NONE          Successfully inserted bytes.
-     * @retval OT_ERROR_NO_BUFS       Insufficient buffer space to insert bytes.
-     *
      */
-    otError Insert(uint8_t *aStart, uint8_t aLength);
+    void Insert(uint8_t *aStart, uint8_t aLength);
 
     /**
      * This method removes bytes from the Network Data.
@@ -400,10 +408,8 @@ protected:
      * @param[in]  aStart   A pointer to the beginning of the removal.
      * @param[in]  aLength  The number of bytes to remove.
      *
-     * @retval OT_ERROR_NONE    Successfully removed bytes.
-     *
      */
-    otError Remove(uint8_t *aStart, uint8_t aLength);
+    void Remove(uint8_t *aStart, uint8_t aLength);
 
     /**
      * This method strips non-stable data from the Thread Network Data.
@@ -509,7 +515,7 @@ private:
         uint8_t *mIteratorBuffer;
     };
 
-    const bool mLocal;
+    const Type mType;
     bool       mLastAttemptWait;
     uint32_t   mLastAttempt;
 };

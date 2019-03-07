@@ -58,12 +58,12 @@ public:
      */
     enum StateFilter
     {
-        kInStateValid,                    ///< Accept child only in `Child::kStateValid`.
-        kInStateValidOrRestoring,         ///< Accept child with `Child::IsStateValidOrRestoring()` being `true`.
-        kInStateChildIdRequest,           ///< Accept child only in `Child:kStateChildIdRequest`.
-        kInStateValidOrAttaching,         ///< Accept child with `Child::IsStateValidOrAttaching()` being `true`.
-        kInStateAnyExceptInvalid,         ///< Accept child in any state except `Child:kStateInvalid`.
-        kInStateAnyExceptValidOrRestoing, ///< Accept child in any state except `Child::IsStateValidOrRestoring()`.
+        kInStateValid,                     ///< Accept child only in `Child::kStateValid`.
+        kInStateValidOrRestoring,          ///< Accept child with `Child::IsStateValidOrRestoring()` being `true`.
+        kInStateChildIdRequest,            ///< Accept child only in `Child:kStateChildIdRequest`.
+        kInStateValidOrAttaching,          ///< Accept child with `Child::IsStateValidOrAttaching()` being `true`.
+        kInStateAnyExceptInvalid,          ///< Accept child in any state except `Child:kStateInvalid`.
+        kInStateAnyExceptValidOrRestoring, ///< Accept child in any state except `Child::IsStateValidOrRestoring()`.
     };
 
     /**
@@ -125,6 +125,26 @@ public:
         void Advance(void);
 
         /**
+         * This method overloads `++` operator (pre-increment) to advance the iterator.
+         *
+         * The iterator is moved to point to the next `Child` entry matching the given state filter in the constructor.
+         * If there are no more `Child` entries matching the given filter, the iterator becomes empty (i.e.,
+         * `GetChild()` returns `NULL` and `IsDone()` returns `true`).
+         *
+         */
+        void operator++(void) { Advance(); }
+
+        /**
+         * This method overloads `++` operator (post-increment) to advance the iterator.
+         *
+         * The iterator is moved to point to the next `Child` entry matching the given state filter in the constructor.
+         * If there are no more `Child` entries matching the given filter, the iterator becomes empty (i.e.,
+         * `GetChild()` returns `NULL` and `IsDone()` returns `true`).
+         *
+         */
+        void operator++(int) { Advance(); }
+
+        /**
          * This method gets the `Child` entry to which the iterator is currently pointing.
          *
          * @returns A pointer to the `Child` entry, or `NULL` if the iterator is done and/or empty.
@@ -144,7 +164,7 @@ public:
      * @param[in]  aInstance     A reference to the OpenThread instance.
      *
      */
-    explicit ChildTable(Instance &aIntsance);
+    explicit ChildTable(Instance &aInstance);
 
     /**
      * This method clears the child table.
@@ -186,7 +206,7 @@ public:
     /**
      * This method searches the child table for a `Child` with a given RLOC16 also matching a given state filter.
      *
-     * @param[in]  aRloc16  A RLCO16 address.
+     * @param[in]  aRloc16  A RLOC16 address.
      * @param[in]  aFilter  A child state filter.
      *
      * @returns  A pointer to the `Child` entry if one is found, or `NULL` otherwise.
@@ -307,11 +327,13 @@ public:
         void   Reset(void) {}
         bool   IsDone(void) const { return true; }
         void   Advance(void) {}
+        void   operator++(void) {}
+        void   operator++(int) {}
         Child *GetChild(void) { return NULL; }
     };
 
-    explicit ChildTable(Instance &aIntsance)
-        : InstanceLocator(aIntsance)
+    explicit ChildTable(Instance &aInstance)
+        : InstanceLocator(aInstance)
     {
     }
     void Clear(void) {}

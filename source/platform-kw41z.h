@@ -39,7 +39,8 @@
 #include <openthread-core-config.h>
 #include <stdint.h>
 
-#include "openthread/types.h"
+#include "openthread/error.h"
+#include "openthread/instance.h"
 /**
  * This function initializes the alarm service used by OpenThread.
  *

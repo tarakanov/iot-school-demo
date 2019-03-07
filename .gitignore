@@ -1,2 +1,11 @@
 /Debug/
 /Release/
+/openthread/doc/
+/openthread/etc
+/openthread/examples/
+/openthread/script/
+/openthread/src/ncp/
+/openthread/src/posix/
+/openthread/tests/
+/openthread/third_party/ti
+/openthread/tools/

@@ -39,9 +39,8 @@
 #include "platform-kw41z.h"
 #include <stdint.h>
 #include "openthread/platform/uart.h"
-#include "openthread/types.h"
+#include "openthread/error.h"
 
-otInstance *sInstance;
 
 void PlatformInit(int argc, char *argv[])
 {
@@ -118,7 +117,6 @@ void PlatformDeinit(void)
 
 void PlatformProcessDrivers(otInstance *aInstance)
 {
-    sInstance = aInstance;
     kw41zUartProcess();
     kw41zRadioProcess(aInstance);
     kw41zAlarmProcess(aInstance);

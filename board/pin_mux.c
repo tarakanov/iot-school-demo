@@ -45,6 +45,7 @@ PinsProfile:
 
 #define PIN6_IDX                         6u   /*!< Pin number for pin 6 in a port */
 #define PIN7_IDX                         7u   /*!< Pin number for pin 7 in a port */
+#define PIN18_IDX                       18u   /*!< Pin number for pin 18 in a port */
 #define SOPT5_LPUART0RXSRC_LPUART_RX  0x00u   /*!< LPUART0 Receive Data Source Select: LPUART_RX pin */
 
 /*
@@ -67,7 +68,7 @@ void BOARD_InitBootPins(void) {
   BOARD_InitPins();
 }
 
-//#define ENABLE_RTT
+#define ENABLE_RTT
 /*FUNCTION**********************************************************************
  *
  * Function Name : BOARD_InitPins
@@ -76,9 +77,12 @@ void BOARD_InitBootPins(void) {
  *END**************************************************************************/
 void BOARD_InitPins(void) {
   CLOCK_EnableClock(kCLOCK_PortC);                           /* Port C Clock Gate Control: Clock enabled */
+  CLOCK_EnableClock(kCLOCK_PortB);                           /* Port B Clock Gate Control: Clock enabled */
+
+  PORT_SetPinMux(PORTB, 1, kPORT_MuxAsGpio);          /* PORTB1 for LED control */
+  PORT_SetPinMux(PORTB, PIN18_IDX, kPORT_PinDisabledOrAnalog); /* PORTB18 (pin 23) is configured as ADC0_SE4 */
 
   PORT_SetPinMux(PORTC, PIN6_IDX, kPORT_MuxAlt4);            /* PORTC6 (pin 42) is configured as UART0_RX */
-
 #ifndef ENABLE_RTT
   //TODO: тут зависает
   PORT_SetPinMux(PORTC, PIN7_IDX, kPORT_MuxAlt4);            /* PORTC7 (pin 43) is configured as UART0_TX */

@@ -36,8 +36,6 @@
 
 #include "openthread-core-config.h"
 
-#include <openthread/types.h>
-
 #include "common/locator.hpp"
 #include "common/message.hpp"
 #include "net/ip6_address.hpp"
@@ -98,11 +96,8 @@ public:
      *
      * @param[in]  aRoute  A reference to the IPv6 route.
      *
-     * @retval OT_ERROR_NONE       Successfully removed the route.
-     * @retval OT_ERROR_NOT_FOUND  The route was not added.
-     *
      */
-    otError Remove(Route &aRoute);
+    void Remove(Route &aRoute);
 
     /**
      * This method performs source-destination route lookup.

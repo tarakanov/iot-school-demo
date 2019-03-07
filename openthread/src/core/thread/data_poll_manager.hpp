@@ -36,8 +36,6 @@
 
 #include "openthread-core-config.h"
 
-#include <openthread/types.h>
-
 #include "common/code_utils.hpp"
 #include "common/locator.hpp"
 #include "common/timer.hpp"
@@ -104,18 +102,22 @@ public:
     otError SendDataPoll(void);
 
     /**
-     * This method sets a user-specified/external data poll period.
+     * This method sets/clears a user-specified/external data poll period.
      *
      * If the user provides a non-zero poll period, the user value specifies the maximum period between data
      * request transmissions. Note that OpenThread may send data request transmissions more frequently when expecting
      * a control-message from a parent or in case of data poll transmission failures or timeouts.
      *
-     * Default value for the external poll period is zero (i.e., no user-specified poll period).
+     * Minimal non-zero value should be `OPENTHREAD_CONFIG_MINIMUM_POLL_PERIOD` (10ms). Or zero to clear user-specified
+     * poll period.
      *
-     * @param[in]  aPeriod  The data poll period in milliseconds, or zero to mean no user-specified poll period.
+     * @param[in]  aPeriod  The data poll period in milliseconds.
+     *
+     * @retval OT_ERROR_NONE           Successfully set/cleared user-specified poll period.
+     * @retval OT_ERROR_INVALID_ARGS   If aPeriod is invalid.
      *
      */
-    void SetExternalPollPeriod(uint32_t aPeriod);
+    otError SetExternalPollPeriod(uint32_t aPeriod);
 
     /**
      * This method gets the current user-specified/external data poll period.
@@ -198,16 +200,17 @@ private:
     enum // Poll period under different conditions (in milliseconds).
     {
         kAttachDataPollPeriod   = OPENTHREAD_CONFIG_ATTACH_DATA_POLL_PERIOD, ///< Poll period during attach.
-        kRetxPollPeriod         = 1000,                                      ///< Poll retx period due to tx failure.
+        kRetxPollPeriod         = OPENTHREAD_CONFIG_RETX_POLL_PERIOD,        ///< Poll retx period due to tx failure.
         kNoBufferRetxPollPeriod = 200,                                       ///< Poll retx due to no buffer space.
         kFastPollPeriod         = 188,                                       ///< Period used for fast polls.
-        kMinPollPeriod          = 10,                                        ///< Minimum allowed poll period.
+        kMinPollPeriod          = OPENTHREAD_CONFIG_MINIMUM_POLL_PERIOD,     ///< Minimum allowed poll period.
     };
 
     enum
     {
         kQuickPollsAfterTimeout = 5, ///< Maximum number of quick data poll tx in case of back-to-back poll timeouts.
-        kMaxPollRetxAttempts    = 5, ///< Maximum number of retransmit attempts of data poll (mac data request).
+        kMaxPollRetxAttempts = OPENTHREAD_CONFIG_FAILED_CHILD_TRANSMISSIONS, ///< Maximum number of retransmit attempts
+                                                                             ///< of data poll (mac data request).
     };
 
     enum PollPeriodSelector

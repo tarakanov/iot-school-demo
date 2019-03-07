@@ -210,6 +210,15 @@ public:
     int8_t GetInterfaceId(void) const { return mInterfaceId; }
 
     /**
+     * This method registers a callback to notify internal IPv6 address changes.
+     *
+     * @param[in]  aCallback         A pointer to a function that is called when an IPv6 address is added or removed.
+     * @param[in]  aCallbackContext  A pointer to application-specific context.
+     *
+     */
+    void SetAddressCallback(otIp6AddressCallback aCallback, void *aCallbackContext);
+
+    /**
      * This method returns a pointer to the list of unicast addresses.
      *
      * @returns A pointer to the list of unicast addresses.
@@ -358,10 +367,11 @@ public:
      *
      * @param[in]  aAddress  A reference to the multicast address.
      *
-     * @retval OT_ERROR_NONE          Successfully subscribed to @p aAddress.
-     * @retval OT_ERROR_ALREADY       The multicast address is already subscribed.
-     * @retval OT_ERROR_INVALID_ARGS  The address indicated by @p aAddress is an internal multicast address.
-     * @retval OT_ERROR_NO_BUFS       The maximum number of allowed external multicast addresses are already added.
+     * @retval OT_ERROR_NONE           Successfully subscribed to @p aAddress.
+     * @retval OT_ERROR_ALREADY        The multicast address is already subscribed.
+     * @retval OT_ERROR_INVALID_ARGS   The address indicated by @p aAddress is an internal multicast address.
+     * @retval OT_ERROR_INVALID_STATE  The Network Interface is not up.
+     * @retval OT_ERROR_NO_BUFS        The maximum number of allowed external multicast addresses are already added.
      *
      */
     otError SubscribeExternalMulticast(const Address &aAddress);
@@ -408,7 +418,11 @@ public:
      * @retval OT_ERROR_NONE  Successfully enqueued the IPv6 message.
      *
      */
-    virtual otError SendMessage(Message &aMessage) = 0;
+    virtual otError SendMessage(Message &aMessage)
+    {
+        OT_UNUSED_VARIABLE(aMessage);
+        return OT_ERROR_NOT_IMPLEMENTED;
+    }
 
     /**
      * This virtual method fills out @p aAddress with the link address.
@@ -418,7 +432,11 @@ public:
      * @retval OT_ERROR_NONE  Successfully retrieved the link address.
      *
      */
-    virtual otError GetLinkAddress(LinkAddress &aAddress) const = 0;
+    virtual otError GetLinkAddress(LinkAddress &aAddress) const
+    {
+        OT_UNUSED_VARIABLE(aAddress);
+        return OT_ERROR_NOT_IMPLEMENTED;
+    }
 
     /**
      * This virtual method performs a source-destination route lookup.
@@ -431,14 +449,43 @@ public:
      * @retval OT_ERROR_NO_ROUTE  No route to destination.
      *
      */
-    virtual otError RouteLookup(const Address &aSource, const Address &aDestination, uint8_t *aPrefixMatch) = 0;
+    virtual otError RouteLookup(const Address &aSource, const Address &aDestination, uint8_t *aPrefixMatch)
+    {
+        OT_UNUSED_VARIABLE(aSource);
+        OT_UNUSED_VARIABLE(aDestination);
+        OT_UNUSED_VARIABLE(aPrefixMatch);
+        return OT_ERROR_NOT_IMPLEMENTED;
+    }
+
+protected:
+    /**
+     * This method subscribes the network interface to the realm-local all MPL forwarders, link-local and
+     * realm-local all nodes address.
+     *
+     */
+    void SubscribeAllNodesMulticast(void);
+
+    /**
+     * This method unsubscribes the network interface from the realm-local all MPL forwarders, link-local and
+     * realm-local all nodes address.
+     *
+     */
+    void UnsubscribeAllNodesMulticast(void);
 
 private:
+    enum
+    {
+        kMulticastPrefixLength = 128, ///< Multicast prefix length used to notify internal address changes.
+    };
+
     NetifUnicastAddress *  mUnicastAddresses;
     NetifMulticastAddress *mMulticastAddresses;
     int8_t                 mInterfaceId;
     bool                   mMulticastPromiscuous;
     Netif *                mNext;
+
+    otIp6AddressCallback mAddressCallback;
+    void *               mAddressCallbackContext;
 
     NetifUnicastAddress   mExtUnicastAddresses[OPENTHREAD_CONFIG_MAX_EXT_IP_ADDRS];
     NetifMulticastAddress mExtMulticastAddresses[OPENTHREAD_CONFIG_MAX_EXT_MULTICAST_IP_ADDRS];

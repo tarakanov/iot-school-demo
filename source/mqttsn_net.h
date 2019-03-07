@@ -10,7 +10,7 @@
 
 #include "openthread-core-config.h"
 
-#include <openthread/types.h>
+//#include <openthread/types.h>
 #include <openthread/udp.h>
 
 #include <sys/time.h>

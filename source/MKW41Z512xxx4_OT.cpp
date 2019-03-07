@@ -38,383 +38,153 @@
 #include "pin_mux.h"
 #include "clock_config.h"
 #include "MKW41Z4.h"
+#include "fsl_adc16.h"
 #include "fsl_debug_console.h"
-
 #include <FreeRTOS.h>
 #include <task.h>
-
-
 #include <assert.h>
 #include <openthread-core-config.h>
 #include <openthread/config.h>
-
 #include <openthread/cli.h>
 #include <openthread/diag.h>
-#include <openthread/openthread.h>
+#include <openthread/tasklet.h>
+#include <openthread/thread.h>
 #include <openthread/platform/logging.h>
-
 #include "platform.h"
-
 #include <app_timer.h>
 #include <nrf_error.h>
 #include <nrf_log.h>
 #include <mqttsn_client.h>
-
 #if ENABLE_RTT_CONSOLE
 #include "SEGGER_RTT/SEGGER_RTT.h"
 #endif
+#include <openthread/include/openthread/coap.h>
+#include <openthread/include/openthread/error.h>
+#include <openthread/src/core/common/code_utils.hpp>
+#include <openthread/src/core/common/logging.hpp>
+#include "board.h"
+#include "peripherals.h"
+#include "pin_mux.h"
+#include "fsl_adc16.h"
+#include <openthread/include/openthread/platform/uart.h>
+#include <openthread/src/core/common/logging.hpp>
+
 //
 // Defines
 //
-#define SEARCH_GATEWAY_TIMEOUT      5                               /**< MQTT-SN Gateway discovery procedure timeout in [s]. */
 
 #define main_task_PRIORITY          (tskIDLE_PRIORITY + 1)
-
-#undef NRF_LOG_INFO
-#undef NRF_LOG_ERROR
-#define NRF_LOG_INFO(...)           DbgConsole_Printf(__VA_ARGS__)
-#define NRF_LOG_ERROR(...)          DbgConsole_Printf(__VA_ARGS__)
+#define BOARD_LED_GPIO BOARD_LED_RED_GPIO
+#define BOARD_LED_GPIO_PIN BOARD_LED_RED_GPIO_PIN
+#define DEMO_ADC16_BASE ADC0
+#define DEMO_ADC16_CHANNEL_GROUP 0U
+#define DEMO_ADC16_USER_CHANNEL 4U /* PTB18, ADC0_SE4 */
+#if ENABLE_RTT_CONSOLE
+#define DOWN_BUFFER_SIZE 100
+#endif
 
 //
 // Type definitions
 //
 typedef enum
 {
-    MQTTState_Init,
-    MQTTState_SearchGW,
-    MQTTState_Connect,
-    MQTTState_Register,
-    MQTTState_Publish,
-    MQTTState_Done,
-} MQTTState_t;
+	appMode_Init,
+	appMode_Manual,
+	appMode_Single,
+	appMode_Multiple
+} appMode_t;
+
+typedef enum
+{
+	light_goes_down,
+	light_no_change,
+	light_goes_up
+} lightTrigger_t;
 
 //
 // Function prototypes
 //
-void mqttsn_evt_handler(mqttsn_client_t * p_client, mqttsn_event_t * p_event);
 static void main_task(void *pvParameters);
 
+void coap_handler_test ( void * aContext,  otMessage * aMessage, const otMessageInfo *aMessageInfo);
+void coap_handler_led_on  ( void * aContext,  otMessage * aMessage, const otMessageInfo *aMessageInfo);
+void coap_handler_lux  ( void * aContext,  otMessage * aMessage, const otMessageInfo *aMessageInfo);
+void coapAppInit();
+void getLightLevel();
+static void coapAppProcess(otInstance *sInstance);
+
 //
-// Static variables
-//
-static mqttsn_client_t      m_client;                                       /**< An MQTT-SN client instance. */
-static mqttsn_remote_t      m_gateway_addr;                                 /**< A gateway address. */
-static uint8_t              m_gateway_id;                                   /**< A gateway ID. */
-static mqttsn_connect_opt_t m_connect_opt;                                  /**< Connect options for the MQTT-SN client. */
-//static uint8_t              m_led_state        = 0;                         /**< Previously sent BSP_LED_2 command. */
-static uint16_t             m_msg_id           = 0;                         /**< Message ID thrown with MQTTSN_EVENT_TIMEOUT. */
-static char                 m_client_id[]      = "test_mqtt_sn";           /**< The MQTT-SN Client's ID. */
-static char                 m_topic_name[]     = "channels/2/messages";      /**< Name of the topic corresponding to subscriber's BSP_LED_2. */
-static mqttsn_topic_t       m_topic            =                            /**< Topic corresponding to subscriber's BSP_LED_2. */
+//  Variables
+
+static appMode_t app_mode = appMode_Init;
+static otInstance *sInstance;
+adc16_config_t adc16ConfigStruct;
+adc16_channel_config_t adc16ChannelConfigStruct;
+otCoapResource cr_1; // coap resource 1
+otCoapResource cr_led; // coap resource for led
+otCoapResource cr_lux; // coap resource for lux
+otCoapResource cr_mode; // coap resource for mode
+otError error = OT_ERROR_NONE;
+uint32_t 	light_level_adc; // current light level in adc readings
+uint32_t	light_index = 0; // index of a device
+otIp6Address allCoapAddr;
+const char *allCoapAddrStr = "FF0A::FD";
+otError      error1 = OT_ERROR_NONE;
+uint32_t light_lvl_trigger = 500;
+uint32_t light_lvl_gyst = 200;
+uint32_t light_lvl_last;
+lightTrigger_t light_trigger = light_no_change;
+TickType_t  ticks, prev_ticks;
+
+static void coapAppProcess(otInstance *sInstance)
 {
-    .p_topic_name = (unsigned char *)m_topic_name,
-    .topic_id     = 0,
-};
-
-static MQTTState_t m_mqtt_state = MQTTState_Init;
-
-
-/***************************************************************************************************
- * @section Thread utils
- **************************************************************************************************/
-
-#if OPENTHREAD_ENABLE_MULTIPLE_INSTANCES
-void *otPlatCAlloc(size_t aNum, size_t aSize)
-{
-    return calloc(aNum, aSize);
-}
-
-void otPlatFree(void *aPtr)
-{
-    free(aPtr);
-}
-#endif
-
-void otTaskletsSignalPending(otInstance *aInstance)
-{
-    (void)aInstance;
-}
-
-/***************************************************************************************************
- * @section MQTT-SN
- **************************************************************************************************/
-
-/**@brief Initializes MQTT-SN client's connection options.
- */
-static void connect_opt_init(void)
-{
-    m_connect_opt.alive_duration = MQTTSN_DEFAULT_ALIVE_DURATION,
-    m_connect_opt.clean_session  = MQTTSN_DEFAULT_CLEAN_SESSION_FLAG,
-    m_connect_opt.will_flag      = MQTTSN_DEFAULT_WILL_FLAG,
-    m_connect_opt.client_id_len  = strlen(m_client_id),
-
-    memcpy(m_connect_opt.p_client_id, (unsigned char *)m_client_id, m_connect_opt.client_id_len);
-}
-
-
-/**@brief Processes GWINFO message from a gateway.
- *
- * @details This function updates MQTT-SN Gateway information.
- *
- * @param[in]    p_event  Pointer to MQTT-SN event.
- */
-static void gateway_info_callback(mqttsn_event_t * p_event)
-{
-    m_gateway_addr = *(p_event->event_data.connected.p_gateway_addr);
-    m_gateway_id   = p_event->event_data.connected.gateway_id;
-
-    m_mqtt_state = MQTTState_Connect;
-}
-
-
-/**@brief Processes CONNACK message from a gateway.
- *
- * @details This function launches the topic registration procedure if necessary.
- */
-static void connected_callback(void)
-{
-    // Switch to register state
-    m_mqtt_state = MQTTState_Register;
-}
-
-
-/**@brief Processes DISCONNECT message from a gateway. */
-static void disconnected_callback(bool byGateway)
-{
-    (void)byGateway;
-
-    // Reset state
-    m_client.client_state = MQTTSN_CLIENT_DISCONNECTED;
-    m_client.evt_handler  = mqttsn_evt_handler;
-
-    m_mqtt_state = MQTTState_SearchGW;
-}
-
-
-/**@brief Processes REGACK message from a gateway.
- *
- * @param[in] p_event Pointer to MQTT-SN event.
- */
-static void regack_callback(mqttsn_event_t * p_event)
-{
-    m_topic.topic_id = p_event->event_data.registered.packet.topic.topic_id;
-    NRF_LOG_INFO("MQTT-SN event: Topic has been registered with ID: %d.\r\n",
-                 p_event->event_data.registered.packet.topic.topic_id);
-    m_mqtt_state = MQTTState_Publish;
-}
-
-
-/**@brief Processes retransmission limit reached event. */
-static void timeout_callback(mqttsn_event_t * p_event)
-{
-    NRF_LOG_INFO("MQTT-SN event: Timed-out message: %d. Message ID: %d.\r\n",
-                  p_event->event_data.error.msg_type,
-                  p_event->event_data.error.msg_id);
-    // try to reconnect in this case
-    if (m_mqtt_state > MQTTState_SearchGW)
-        m_mqtt_state = MQTTState_Connect;
-}
-
-
-/**@brief Processes results of gateway discovery procedure. */
-static void searchgw_timeout_callback(mqttsn_event_t * p_event)
-{
-    NRF_LOG_INFO("MQTT-SN event: Gateway discovery result: 0x%x.\r\n", p_event->event_data.discovery);
-}
-
-
-/**@brief Function for handling MQTT-SN events. */
-void mqttsn_evt_handler(mqttsn_client_t * p_client, mqttsn_event_t * p_event)
-{
-    switch(p_event->event_id)
-    {
-        case MQTTSN_EVENT_GATEWAY_FOUND:
-            NRF_LOG_INFO("MQTT-SN event: Client has found an active gateway.\r\n");
-            gateway_info_callback(p_event);
-            break;
-
-        case MQTTSN_EVENT_CONNECTED:
-            NRF_LOG_INFO("MQTT-SN event: Client connected.\r\n");
-            connected_callback();
-            break;
-
-        case MQTTSN_EVENT_DISCONNECTED:
-            NRF_LOG_INFO("MQTT-SN event: Client disconnected by gateway.\r\n");
-            disconnected_callback(true);
-            break;
-
-        case MQTTSN_EVENT_DISCONNECT_PERMIT:
-            NRF_LOG_INFO("MQTT-SN event: Client disconnected.\r\n");
-            disconnected_callback(false);
-            break;
-
-        case MQTTSN_EVENT_REGISTERED:
-            NRF_LOG_INFO("MQTT-SN event: Client registered topic.\r\n");
-            regack_callback(p_event);
-            break;
-
-        case MQTTSN_EVENT_PUBLISHED:
-            NRF_LOG_INFO("MQTT-SN event: Client has successfully published content.\r\n");
-            m_mqtt_state = MQTTState_Done;
-            break;
-
-        case MQTTSN_EVENT_TIMEOUT:
-            NRF_LOG_INFO("MQTT-SN event: Retransmission retries limit has been reached.\r\n");
-            timeout_callback(p_event);
-            break;
-
-        case MQTTSN_EVENT_SEARCHGW_TIMEOUT:
-            NRF_LOG_INFO("MQTT-SN event: Gateway discovery procedure has finished.\r\n");
-            searchgw_timeout_callback(p_event);
-            break;
-
-        default:
-            break;
-    }
-}
-
-
-/*
- * @brief MQTT-SN Process
- * @param sInstance - pointer to Thread instance
- */
-static void MqttProcess(otInstance *sInstance)
-{
-    if (otThreadGetDeviceRole(sInstance) < OT_DEVICE_ROLE_CHILD )
-        return;
-
-    static TickType_t s_ticks = xTaskGetTickCount(); // in milliseconds
-
-    switch (m_mqtt_state)
-    {
-        case MQTTState_Init:
-        {
-            DbgConsole_Printf("Init MQTT...");
-            app_timer_init();
-
-            mqttsn_client_init(&m_client,
-                               MQTTSN_DEFAULT_CLIENT_PORT,
-                               mqttsn_evt_handler,
-                               sInstance);
-
-            connect_opt_init();
-
-            // switch to the next state
-            m_mqtt_state = MQTTState_SearchGW;
-            break;
-        }
-        case MQTTState_SearchGW:
-        {
-            uint32_t err_code = mqttsn_client_search_gateway(&m_client, SEARCH_GATEWAY_TIMEOUT);
-            if (err_code != NRF_SUCCESS)
-            {
-                if (err_code != NRF_ERROR_BUSY)
-                    NRF_LOG_ERROR("SEARCH GATEWAY message could not be sent. Error: 0x%x\r\n", err_code);
-            }
-            break;
-        }
-
-        case MQTTState_Connect:
-        {
-            uint32_t err_code;
-
-            if (mqttsn_client_state_get(&m_client) == MQTTSN_CLIENT_CONNECTED)
-            {
-                err_code = mqttsn_client_disconnect(&m_client);
-                if (err_code != NRF_SUCCESS)
-                {
-                    NRF_LOG_ERROR("DISCONNECT message could not be sent. Error: 0x%x\r\n", err_code);
-                }
-            }
-            else
-            {
-#if 0
-                // for testing purposes
-                m_gateway_addr.port_number = MQTTSN_DEFAULT_CLIENT_PORT;
-                m_gateway_addr.addr[0] = 0xfd;
-                m_gateway_addr.addr[1] = 0x11;
-
-                m_gateway_addr.addr[2] = 0x11;
-                m_gateway_addr.addr[3] = 0x11;
-
-                m_gateway_addr.addr[4] = 0x11;
-                m_gateway_addr.addr[5] = 0x22;
-
-                m_gateway_addr.addr[6] = 0x0;
-                m_gateway_addr.addr[7] = 0x0;
-
-                m_gateway_addr.addr[8] = 0xd6;
-                m_gateway_addr.addr[9] = 0x3d;
-
-                m_gateway_addr.addr[10] = 0xcb;
-                m_gateway_addr.addr[11] = 0x9a;
-
-                m_gateway_addr.addr[12] = 0x58;
-                m_gateway_addr.addr[13] = 0xb8;
-
-                m_gateway_addr.addr[14] = 0x6;
-                m_gateway_addr.addr[15] = 0x78;
-                m_gateway_id = 1;
-#endif
-
-                err_code = mqttsn_client_connect(&m_client, &m_gateway_addr, m_gateway_id, &m_connect_opt);
-                if (err_code != NRF_SUCCESS)
-                {
-                    if (err_code != NRF_ERROR_INVALID_STATE)
-                        NRF_LOG_ERROR("CONNECT message could not be sent. Error: 0x%x\r\n", err_code);
-                }
-            }
-            break;
-        }
-
-        case MQTTState_Register:
-        {
-            uint32_t err_code = mqttsn_client_topic_register(&m_client,
-                                                             m_topic.p_topic_name,
-                                                             strlen(m_topic_name),
-                                                             &m_msg_id);
-            if (err_code != NRF_SUCCESS)
-            {
-                NRF_LOG_ERROR("REGISTER message could not be sent. Error code: 0x%x\r\n", err_code);
-            }
-            break;
-        }
-
-        case MQTTState_Publish:
-        {
-            static const char data[] = "[{'Hard Version':'1','Soft Version':1,'Ticks':%u}]";
-            static char message[sizeof(data) + 16];
-            snprintf(message, sizeof(message)-1, data, (unsigned int)s_ticks);
-            uint32_t err_code = mqttsn_client_publish(&m_client, m_topic.topic_id, (const uint8_t*)message, strlen(message), &m_msg_id);
-            if (err_code != NRF_SUCCESS)
-            {
-                NRF_LOG_ERROR("PUBLISH message could not be sent. Error code: 0x%x\r\n", err_code);
-            }
-            break;
-        }
-
-        case MQTTState_Done:
-        {
-            if (xTaskGetTickCount() - s_ticks > 10000)
-            {
-                s_ticks = xTaskGetTickCount();
-
-                // Publish new value
-                m_mqtt_state = MQTTState_Publish;
-            }
-            break;
-        }
-
-        default:
-            break;
-    }
+	getLightLevel();
+	switch(app_mode)
+	{
+	case appMode_Init:
+	{
+		ticks = xTaskGetTickCount();
+		prev_ticks = xTaskGetTickCount();
+		break;
+	}
+	case appMode_Manual:
+	{
+		break;
+	}
+	case appMode_Single:
+	{
+		ticks = xTaskGetTickCount();
+		if (ticks - prev_ticks > pdMS_TO_TICKS(3000)) // every 3000 ms
+		{
+			otLogInfoPlat("App action\r\n");
+			prev_ticks = xTaskGetTickCount();
+			switch (light_trigger)
+			{
+			case light_goes_up:
+			{
+				GPIO_ClearPinsOutput(BOARD_LED_GPIO, 1u << BOARD_LED_GPIO_PIN);
+				break;
+			}
+			case light_goes_down:
+			{
+				GPIO_SetPinsOutput(BOARD_LED_GPIO, 1u << BOARD_LED_GPIO_PIN);
+				break;
+			}
+			default:
+				break;
+			}
+		}
+		break;
+	}
+	default:
+		break;
+	}
 }
 
 /*
  * @brief   Application entry point.
  */
 int main(void) {
-
     xTaskCreate(main_task, "Main", configMINIMAL_STACK_SIZE + 512 + 256, NULL, main_task_PRIORITY, NULL);
     vTaskStartScheduler();
     for (;;)
@@ -422,12 +192,6 @@ int main(void) {
     return 0;
 }
 
-#include <openthread/include/openthread/platform/uart.h>
-#include <openthread/src/core/common/logging.hpp>
-
-#if ENABLE_RTT_CONSOLE
-#define DOWN_BUFFER_SIZE 16
-#endif
 /*!
  * @brief Main task
  */
@@ -435,69 +199,46 @@ static void main_task(void *pvParameters)
 {
     int argc = 0;
     char *argv[] = {(char*)"", NULL};
-
 #if ENABLE_RTT_CONSOLE
     char input[DOWN_BUFFER_SIZE];
     size_t index = 0;
 	memset(input, 0x00, DOWN_BUFFER_SIZE);
 #endif
-    otInstance *sInstance;
 
   	/* Init board hardware. */
     BOARD_InitBootPins();
     BOARD_InitBootClocks();
     BOARD_InitBootPeripherals();
-  	/* Init FSL debug console. */
     BOARD_InitDebugConsole();
-
-    //================================
-
-
-    DbgConsole_Printf("Initializing\r\n");
-
-#if OPENTHREAD_ENABLE_MULTIPLE_INSTANCES
-    size_t   otInstanceBufferLength = 0;
-    uint8_t *otInstanceBuffer       = NULL;
-#endif
+    gpio_pin_config_t led_config = {
+        kGPIO_DigitalOutput, 0,
+    };
+    GPIO_PinInit(BOARD_LED_GPIO, BOARD_LED_GPIO_PIN, &led_config);
+    ADC16_GetDefaultConfig(&adc16ConfigStruct);
+    ADC16_Init(DEMO_ADC16_BASE, &adc16ConfigStruct);
+    ADC16_EnableHardwareTrigger(DEMO_ADC16_BASE, false); /* Make sure the software trigger is used. */
+    adc16ChannelConfigStruct.channelNumber = DEMO_ADC16_USER_CHANNEL;
+    adc16ChannelConfigStruct.enableInterruptOnConversionCompleted = false;
 
 pseudo_reset:
 
     PlatformInit(argc, argv);
-
-    DbgConsole_Printf("Init instance\r\n");
-#if OPENTHREAD_ENABLE_MULTIPLE_INSTANCES
-    // Call to query the buffer size
-    (void)otInstanceInit(NULL, &otInstanceBufferLength);
-
-    // Call to allocate the buffer
-    otInstanceBuffer = (uint8_t *)malloc(otInstanceBufferLength);
-    assert(otInstanceBuffer);
-
-    // Initialize OpenThread with the buffer
-    sInstance = otInstanceInit(otInstanceBuffer, &otInstanceBufferLength);
-#else
+    otLogInfoPlat("Init instance\r\n");
     sInstance = otInstanceInitSingle();
-#endif
     assert(sInstance);
-    otLogInfo(sInstance, OT_LOG_REGION_PLATFORM, "InstanceInit");
-
-    DbgConsole_Printf("Init OT uart\r\n");
     otCliUartInit(sInstance);
-
-#if OPENTHREAD_ENABLE_DIAG
-    DbgConsole_Printf("Init diag\r\n");
-    otDiagInit(sInstance);
-#endif
-
     otIp6SetEnabled(sInstance, true);
 
-    DbgConsole_Printf("Start...\r\n");
+    coapAppInit(); // init COAP resources
+    error1 = otIp6AddressFromString(allCoapAddrStr, &allCoapAddr);
+    error1= otIp6SubscribeMulticastAddress(sInstance, &allCoapAddr);
+
     while (!PlatformPseudoResetWasRequested())
     {
         otTaskletsProcess(sInstance);
         PlatformProcessDrivers(sInstance);
+        coapAppProcess(sInstance);
 
-        MqttProcess(sInstance);
 #if (ENABLE_RTT_CONSOLE)
         if (SEGGER_RTT_HasKey())
         {
@@ -505,8 +246,7 @@ pseudo_reset:
         	if (input[index] == '\0') continue;
         	if (input[index] == '\n')
         	{
-            	otLogInfo(sInstance, OT_LOG_REGION_PLATFORM, "%s", input);
-
+        		otLogInfoPlat( "%s", input);
             	otPlatUartReceived((uint8_t*)input, strlen(input));
             	index = 0;
             	memset(input, 0x00, DOWN_BUFFER_SIZE);
@@ -515,29 +255,451 @@ pseudo_reset:
 #endif
         taskYIELD();
     }
-
-    DbgConsole_Printf("Finalize...\r\n");
     otInstanceFinalize(sInstance);
-#if OPENTHREAD_ENABLE_MULTIPLE_INSTANCES
-    free(otInstanceBuffer);
-#endif
-
     goto pseudo_reset;
 }
 
-/*
- * Provide, if required an "otPlatLog()" function
- */
-#if OPENTHREAD_CONFIG_LOG_OUTPUT == OPENTHREAD_CONFIG_LOG_OUTPUT_APP
-void otPlatLog(otLogLevel aLogLevel, otLogRegion aLogRegion, const char *aFormat, ...)
+void coap_handler_test ( void * aContext, otMessage * aMessage, const otMessageInfo *aMessageInfo)
 {
-    OT_UNUSED_VARIABLE(aLogLevel);
-    OT_UNUSED_VARIABLE(aLogRegion);
-    OT_UNUSED_VARIABLE(aFormat);
+    otError      error = OT_ERROR_NONE;
+    otMessage *  responseMessage;
+    otCoapCode   responseCode    = OT_COAP_CODE_EMPTY;
+    char         responseContent[] = "hello\r\n";
 
-    va_list ap;
-    va_start(ap, aFormat);
-    otCliPlatLogv(aLogLevel, aLogRegion, aFormat, ap);
-    va_end(ap);
+    if (otCoapMessageGetType(aMessage) == OT_COAP_TYPE_CONFIRMABLE ||
+        otCoapMessageGetCode(aMessage) == OT_COAP_CODE_GET)
+    {
+        if (otCoapMessageGetCode(aMessage) == OT_COAP_CODE_GET)
+        {
+            responseCode = OT_COAP_CODE_CONTENT;
+        }
+        else
+        {
+            responseCode = OT_COAP_CODE_VALID;
+        }
+
+        responseMessage = otCoapNewMessage(sInstance, NULL);
+        VerifyOrExit(responseMessage != NULL, error = OT_ERROR_NO_BUFS);
+
+        otCoapMessageInit(responseMessage, OT_COAP_TYPE_ACKNOWLEDGMENT, responseCode);
+        otCoapMessageSetMessageId(responseMessage, otCoapMessageGetMessageId(aMessage));
+        otCoapMessageSetToken(responseMessage, otCoapMessageGetToken(aMessage), otCoapMessageGetTokenLength(aMessage));
+
+        if (otCoapMessageGetCode(aMessage) == OT_COAP_CODE_GET)
+        {
+            otCoapMessageSetPayloadMarker(responseMessage);
+            SuccessOrExit(error = otMessageAppend(responseMessage, &responseContent, sizeof(responseContent)));
+        }
+
+        SuccessOrExit(error = otCoapSendResponse(sInstance, responseMessage, aMessageInfo));
+    }
+
+exit:
+
+    if (error != OT_ERROR_NONE)
+    {
+        if (responseMessage != NULL)
+        {
+        	otLogInfoPlat("coap send response error %d: %s\r\n", error,
+                                               otThreadErrorToString(error));
+            otMessageFree(responseMessage);
+        }
+    }
+    else if (responseCode >= OT_COAP_CODE_RESPONSE_MIN)
+    {
+    	otLogInfoPlat("coap response sent successfully!\r\n");
+    }
 }
-#endif
+
+void led_process_query(const char *option_value, uint16_t option_length)
+{
+	otLogInfoPlat("Processing query %.*s\r\n", option_length, option_value);
+
+	if (strncmp(option_value, "toggle", option_length) == 0)
+	{
+		otLogInfoPlat("toggle action");
+        GPIO_TogglePinsOutput(BOARD_LED_GPIO, 1u << BOARD_LED_GPIO_PIN);
+	};
+	if (strncmp(option_value, "on", option_length) == 0)
+	{
+		otLogInfoPlat("on action");
+        GPIO_SetPinsOutput(BOARD_LED_GPIO, 1u << BOARD_LED_GPIO_PIN);
+	};
+	if (strncmp(option_value, "off", option_length) == 0)
+	{
+		otLogInfoPlat("off action");
+        GPIO_ClearPinsOutput(BOARD_LED_GPIO, 1u << BOARD_LED_GPIO_PIN);
+	};
+}
+
+void coap_handler_led  ( void * aContext, otMessage * aMessage, const otMessageInfo *aMessageInfo)
+{
+    otError      error = OT_ERROR_NONE;
+    otMessage *  responseMessage;
+    otCoapCode   responseCode    = OT_COAP_CODE_EMPTY;
+    char         responseContent[14];
+    uint32_t     led_value;
+
+	const otCoapOption *option;
+	char option_value[100];
+
+	option = otCoapMessageGetFirstOption(aMessage);
+	while (error == OT_ERROR_NONE)
+	{
+		error = otCoapMessageGetOptionValue(aMessage, &option_value);
+		if (option->mNumber == OT_COAP_OPTION_URI_QUERY) led_process_query(option_value, option->mLength);
+	    option = otCoapMessageGetNextOption(aMessage);
+	    if (option->mLength > 255) break;
+	}
+
+    if (otCoapMessageGetType(aMessage) == OT_COAP_TYPE_CONFIRMABLE ||
+        otCoapMessageGetCode(aMessage) == OT_COAP_CODE_GET)
+    {
+        if (otCoapMessageGetCode(aMessage) == OT_COAP_CODE_GET)
+        {
+            responseCode = OT_COAP_CODE_CONTENT;
+        }
+        else
+        {
+            responseCode = OT_COAP_CODE_VALID;
+        }
+
+        responseMessage = otCoapNewMessage(sInstance, NULL);
+        VerifyOrExit(responseMessage != NULL, error = OT_ERROR_NO_BUFS);
+
+        otCoapMessageInit(responseMessage, OT_COAP_TYPE_ACKNOWLEDGMENT, responseCode);
+        otCoapMessageSetMessageId(responseMessage, otCoapMessageGetMessageId(aMessage));
+        otCoapMessageSetToken(responseMessage, otCoapMessageGetToken(aMessage), otCoapMessageGetTokenLength(aMessage));
+
+        if (otCoapMessageGetCode(aMessage) == OT_COAP_CODE_GET)
+        {
+            otCoapMessageSetPayloadMarker(responseMessage);
+            led_value = GPIO_ReadPinInput(BOARD_LED_GPIO, BOARD_LED_GPIO_PIN);
+            sprintf(responseContent, "led now is %s", led_value ? " on": "off");
+            SuccessOrExit(error = otMessageAppend(responseMessage, &responseContent, sizeof(responseContent)));
+        }
+
+        SuccessOrExit(error = otCoapSendResponse(sInstance, responseMessage, aMessageInfo));
+    }
+
+exit:
+
+    if (error != OT_ERROR_NONE)
+    {
+        if (responseMessage != NULL)
+        {
+        	otLogInfoPlat("coap send response error %d: %s\r\n", error,
+                                               otThreadErrorToString(error));
+            otMessageFree(responseMessage);
+        }
+    }
+    else if (responseCode >= OT_COAP_CODE_RESPONSE_MIN)
+    {
+    	otLogInfoPlat("coap response sent successfully!\r\n");
+    }
+}
+
+void lux_process_query(const char *option_value, uint16_t option_length, char *responseContent)
+{
+	char query[option_length+1];
+	strncpy(query, option_value, option_length);
+	query[option_length] = '\0';
+	otLogInfoPlat("Processing query %s\r\n", query);
+
+//	char *key;
+//	char *value;
+//	char *st = query;
+//
+//	key = strsep(&st, "=");
+//	value = st;
+
+
+	if (strncmp(query, "lvl=", 4) == 0)
+	{
+		uint32_t trigger_lvl = strtol(&query[4], NULL, 10);
+		if (trigger_lvl != 0) {
+			light_lvl_trigger = trigger_lvl;
+			otLogInfoPlat("set trigger level to %lu", light_lvl_trigger);
+		    sprintf(responseContent, "lvl: %lu", light_lvl_trigger);
+		}
+	};
+	if (strncmp(query, "dz=", 3) == 0)
+	{
+		otLogInfoPlat("get deadzone");
+		uint32_t deadzone_val = strtol(&query[3], NULL, 10);
+		if (deadzone_val != 0) {
+			light_lvl_gyst = deadzone_val;
+			otLogInfoPlat("set deadzone value to %lu", light_lvl_gyst);
+		    sprintf(responseContent, "dz: %lu", light_lvl_gyst);
+		}
+	};
+
+	if (strncmp(query, "raw", option_length) == 0)
+	{
+	    otLogInfoPlat("LUX ADC  Value: %d\r\n", light_level_adc);
+	    sprintf(responseContent, "adc: %lu", light_level_adc);
+	};
+
+	if (strncmp(query, "lvl", option_length) == 0)
+	{
+	    otLogInfoPlat("LUX trigger  Value: %d\r\n", light_lvl_trigger);
+	    sprintf(responseContent, "lvl: %lu", light_lvl_trigger);
+	};
+
+	if (strncmp(query, "dz", option_length) == 0)
+	{
+	    otLogInfoPlat("LUX Deadzone  Value: %d\r\n", light_lvl_gyst);
+	    sprintf(responseContent, "dz: %lu", light_lvl_gyst);
+	};
+
+}
+
+void coap_handler_lux  ( void * aContext, otMessage * aMessage, const otMessageInfo *aMessageInfo)
+{
+    otError      error = OT_ERROR_NONE;
+    otMessage *  responseMessage;
+    otCoapCode   responseCode    = OT_COAP_CODE_EMPTY;
+    char         responseContent[30] = "0";
+
+    //parse options
+
+	const otCoapOption *option;
+	char option_value[100];
+
+
+	option = otCoapMessageGetFirstOption(aMessage);
+	while (error == OT_ERROR_NONE)
+	{
+		error = otCoapMessageGetOptionValue(aMessage, &option_value);
+		 if (option->mNumber == OT_COAP_OPTION_URI_QUERY)
+		{
+			otLogInfoPlat("URI query is %.*s\r\n", option->mLength, &option_value);
+			lux_process_query(option_value, option->mLength, responseContent);
+		}
+	    option = otCoapMessageGetNextOption(aMessage);
+	    if (option->mLength > 255) break;
+	}
+
+    if (otCoapMessageGetType(aMessage) == OT_COAP_TYPE_CONFIRMABLE ||
+        otCoapMessageGetCode(aMessage) == OT_COAP_CODE_GET)
+    {
+        if (otCoapMessageGetCode(aMessage) == OT_COAP_CODE_GET)
+        {
+            responseCode = OT_COAP_CODE_CONTENT;
+        }
+        else
+        {
+            responseCode = OT_COAP_CODE_VALID;
+        }
+
+        responseMessage = otCoapNewMessage(sInstance, NULL);
+        VerifyOrExit(responseMessage != NULL, error = OT_ERROR_NO_BUFS);
+
+        otCoapMessageInit(responseMessage, OT_COAP_TYPE_ACKNOWLEDGMENT, responseCode);
+        otCoapMessageSetMessageId(responseMessage, otCoapMessageGetMessageId(aMessage));
+        otCoapMessageSetToken(responseMessage, otCoapMessageGetToken(aMessage), otCoapMessageGetTokenLength(aMessage));
+
+        if (otCoapMessageGetCode(aMessage) == OT_COAP_CODE_GET)
+        {
+            otCoapMessageSetPayloadMarker(responseMessage);
+            SuccessOrExit(error = otMessageAppend(responseMessage, &responseContent, sizeof(responseContent)));
+        }
+
+        SuccessOrExit(error = otCoapSendResponse(sInstance, responseMessage, aMessageInfo));
+    }
+
+exit:
+
+    if (error != OT_ERROR_NONE)
+    {
+        if (responseMessage != NULL)
+        {
+        	otLogInfoPlat("coap send response error %d: %s\r\n", error,
+                                               otThreadErrorToString(error));
+            otMessageFree(responseMessage);
+        }
+    }
+    else if (responseCode >= OT_COAP_CODE_RESPONSE_MIN)
+    {
+    	otLogInfoPlat("coap response sent successfully!\r\n");
+    }
+}
+
+void mode_process_query(const char *option_value, uint16_t option_length, char *responseContent)
+{
+	char query[option_length+1];
+	strncpy(query, option_value, option_length);
+	query[option_length] = '\0';
+	otLogInfoPlat("Processing query %s\r\n", query);
+
+	if (strncmp(query, "mode", option_length) == 0)
+	{
+		switch(app_mode)
+		{
+		case appMode_Manual:
+		{
+		    sprintf(responseContent, "mode: off");
+			break;
+		}
+		case appMode_Single:
+		{
+		    sprintf(responseContent, "mode: single");
+			break;
+		}
+		case appMode_Multiple:
+		{
+		    sprintf(responseContent, "mode: multi");
+			break;
+		}
+		default:
+			break;
+		}
+	};
+
+	if (strncmp(query, "index", option_length) == 0)
+	{
+	    sprintf(responseContent, "index: %lu", light_index);
+	};
+
+
+	if (strncmp(query, "index=", 6) == 0)
+	{
+		uint32_t number = strtol(&query[6], NULL, 10);
+		if (number != 0) {
+			light_index = number;
+			otLogInfoPlat("set device index to %lu", light_index);
+		    sprintf(responseContent, "index: %lu", light_index);
+		}
+	};
+
+	if (strncmp(query, "mode=", 5) == 0)
+	{
+		char mode_str[sizeof(query) - sizeof("mode=")+1];
+		strcpy(mode_str, &query[5]);
+		mode_str[sizeof(query) - sizeof("mode=")] = '\0';
+		otLogInfoPlat("mode_str %s\r\n", mode_str);
+		if (strcmp(mode_str, "off") == 0)
+		{
+			app_mode = appMode_Manual;
+			otLogInfoPlat("set device mode to off");
+			sprintf(responseContent, "mode: off");
+		}
+		else if (strcmp(mode_str, "single") == 0)
+		{
+			app_mode = appMode_Single;
+			otLogInfoPlat("set device mode to single");
+			sprintf(responseContent, "mode: single");
+		}
+		else if (strcmp(mode_str, "multi") == 0)
+		{
+			app_mode = appMode_Multiple;
+			otLogInfoPlat("set device mode to multi");
+			sprintf(responseContent, "mode: multi");
+		}
+	}
+}
+
+void coap_handler_mode  ( void * aContext, otMessage * aMessage, const otMessageInfo *aMessageInfo)
+{
+    otError      error = OT_ERROR_NONE;
+    otMessage *  responseMessage;
+    otCoapCode   responseCode    = OT_COAP_CODE_EMPTY;
+    char         responseContent[30] = "0";
+
+    //parse options
+
+	const otCoapOption *option;
+	char option_value[100];
+
+
+	option = otCoapMessageGetFirstOption(aMessage);
+	while (error == OT_ERROR_NONE)
+	{
+		error = otCoapMessageGetOptionValue(aMessage, &option_value);
+		if (option->mNumber == OT_COAP_OPTION_URI_QUERY)
+		{
+			otLogInfoPlat("URI query is %.*s\r\n", option->mLength, &option_value);
+			mode_process_query(option_value, option->mLength, responseContent);
+			break;
+		}
+	    option = otCoapMessageGetNextOption(aMessage);
+	    if (option->mLength > 255) break;
+	}
+
+    if (otCoapMessageGetType(aMessage) == OT_COAP_TYPE_CONFIRMABLE ||
+        otCoapMessageGetCode(aMessage) == OT_COAP_CODE_GET)
+    {
+        if (otCoapMessageGetCode(aMessage) == OT_COAP_CODE_GET)
+        {
+            responseCode = OT_COAP_CODE_CONTENT;
+        }
+        else
+        {
+            responseCode = OT_COAP_CODE_VALID;
+        }
+
+        responseMessage = otCoapNewMessage(sInstance, NULL);
+        VerifyOrExit(responseMessage != NULL, error = OT_ERROR_NO_BUFS);
+
+        otCoapMessageInit(responseMessage, OT_COAP_TYPE_ACKNOWLEDGMENT, responseCode);
+        otCoapMessageSetMessageId(responseMessage, otCoapMessageGetMessageId(aMessage));
+        otCoapMessageSetToken(responseMessage, otCoapMessageGetToken(aMessage), otCoapMessageGetTokenLength(aMessage));
+
+        if (otCoapMessageGetCode(aMessage) == OT_COAP_CODE_GET)
+        {
+            otCoapMessageSetPayloadMarker(responseMessage);
+            SuccessOrExit(error = otMessageAppend(responseMessage, &responseContent, sizeof(responseContent)));
+        }
+
+        SuccessOrExit(error = otCoapSendResponse(sInstance, responseMessage, aMessageInfo));
+    }
+
+exit:
+
+    if (error != OT_ERROR_NONE)
+    {
+        if (responseMessage != NULL)
+        {
+        	otLogInfoPlat("coap send response error %d: %s\r\n", error,
+                                               otThreadErrorToString(error));
+            otMessageFree(responseMessage);
+        }
+    }
+    else if (responseCode >= OT_COAP_CODE_RESPONSE_MIN)
+    {
+    	otLogInfoPlat("coap response sent successfully!\r\n");
+    }
+}
+
+void coapAppInit()
+{
+	//    error = otCoapStart(sInstance, OT_DEFAULT_COAP_PORT);
+	    cr_1.mUriPath = "test";
+	    cr_1.mHandler = &coap_handler_test;
+	    error = otCoapAddResource(sInstance, &cr_1);
+
+	    cr_led.mUriPath = "led";
+	    cr_led.mHandler = &coap_handler_led;
+	    error = otCoapAddResource(sInstance, &cr_led);
+
+	    cr_lux.mUriPath = "lux";
+	    cr_lux.mHandler = &coap_handler_lux;
+	    error = otCoapAddResource(sInstance, &cr_lux);
+
+	    cr_mode.mUriPath = "device";
+	    cr_mode.mHandler = &coap_handler_mode;
+	    error = otCoapAddResource(sInstance, &cr_mode);
+}
+
+void getLightLevel()
+{
+	light_lvl_last = light_level_adc;
+    ADC16_SetChannelConfig(DEMO_ADC16_BASE, DEMO_ADC16_CHANNEL_GROUP, &adc16ChannelConfigStruct);
+    while (0U == (kADC16_ChannelConversionDoneFlag &
+                  ADC16_GetChannelStatusFlags(DEMO_ADC16_BASE, DEMO_ADC16_CHANNEL_GROUP)))
+    {
+    }
+	light_level_adc = ADC16_GetChannelConversionValue(DEMO_ADC16_BASE, DEMO_ADC16_CHANNEL_GROUP);
+	if (light_level_adc > (light_lvl_trigger + light_lvl_gyst))	light_trigger = light_goes_up;
+	if (light_level_adc < (light_lvl_trigger - light_lvl_gyst))	light_trigger = light_goes_down;
+}

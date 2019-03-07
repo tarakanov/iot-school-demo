@@ -83,6 +83,24 @@ public:
         void Advance(void);
 
         /**
+         * This method overloads `++` operator (pre-increment) to advance the iterator.
+         *
+         * The iterator is moved to point to the next entry.  If there are no more entries matching the iterator
+         * becomes empty (i.e., `GetRouter()` returns `NULL` and `IsDone()` returns `true`).
+         *
+         */
+        void operator++(void) { Advance(); }
+
+        /**
+         * This method overloads `++` operator (post-increment) to advance the iterator.
+         *
+         * The iterator is moved to point to the next entry.  If there are no more entries matching the iterator
+         * becomes empty (i.e., `GetRouter()` returns `NULL` and `IsDone()` returns `true`).
+         *
+         */
+        void operator++(int) { Advance(); }
+
+        /**
          * This method gets the entry to which the iterator is currently pointing.
          *
          * @returns A pointer to the current entry, or `NULL` if the iterator is done/empty.
@@ -159,6 +177,14 @@ public:
     uint8_t GetActiveRouterCount(void) const { return mActiveRouterCount; }
 
     /**
+     * This method returns the number of active links with neighboring routers.
+     *
+     * @returns The number of active links with neighboring routers.
+     *
+     */
+    uint8_t GetActiveLinkCount(void) const;
+
+    /**
      * This method returns the leader in the Thread network.
      *
      * @returns A pointer to the Leader in the Thread network.
@@ -207,17 +233,20 @@ public:
     /**
      * This method returns the router for a given router id.
      *
-     * @parma[in]  aRouterId  The router id.
+     * @param[in]  aRouterId  The router id.
      *
      * @returns A pointer to the router or NULL if the router could not be found.
      *
      */
-    Router *GetRouter(uint8_t aRouterId);
+    Router *GetRouter(uint8_t aRouterId)
+    {
+        return const_cast<Router *>(const_cast<const RouterTable *>(this)->GetRouter(aRouterId));
+    }
 
     /**
      * This method returns the router for a given router id.
      *
-     * @parma[in]  aRouterId  The router id.
+     * @param[in]  aRouterId  The router id.
      *
      * @returns A pointer to the router or NULL if the router could not be found.
      *
@@ -303,10 +332,17 @@ public:
     void ProcessTimerTick(void);
 
 private:
-    void UpdateAllocation(void);
+    void          UpdateAllocation(void);
+    const Router *GetFirstEntry(void) const;
+    const Router *GetNextEntry(const Router *aRouter) const;
+    Router *GetFirstEntry(void) { return const_cast<Router *>(const_cast<const RouterTable *>(this)->GetFirstEntry()); }
+    Router *GetNextEntry(Router *aRouter)
+    {
+        return const_cast<Router *>(const_cast<const RouterTable *>(this)->GetNextEntry(aRouter));
+    }
 
     Router   mRouters[Mle::kMaxRouters];
-    uint8_t  mAllocatedRouterIds[BitVectorBytes(Mle::kMaxRouterId)];
+    uint8_t  mAllocatedRouterIds[BitVectorBytes(Mle::kMaxRouterId + 1)];
     uint8_t  mRouterIdReuseDelay[Mle::kMaxRouterId + 1];
     uint32_t mRouterIdSequenceLastUpdated;
     uint8_t  mRouterIdSequence;
@@ -327,10 +363,14 @@ public:
         void    Reset(void) {}
         bool    IsDone(void) const { return true; }
         void    Advance(void) {}
+        void    operator++(void) {}
+        void    operator++(int) {}
         Router *GetRouter(void) { return NULL; }
     };
 
     explicit RouterTable(Instance &) {}
+
+    uint8_t GetNeighborCount(void) const { return 0; }
 };
 
 #endif // OPENTHREAD_MTD

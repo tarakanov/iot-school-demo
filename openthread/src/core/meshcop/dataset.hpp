@@ -37,6 +37,8 @@
 
 #include "openthread-core-config.h"
 
+#include <openthread/dataset.h>
+
 #include "common/locator.hpp"
 #include "common/message.hpp"
 #include "meshcop/meshcop_tlvs.hpp"
@@ -185,22 +187,19 @@ public:
      *
      * @param[in]  aDataset  The input Dataset.
      *
-     * @retval OT_ERROR_NONE  Successfully set the Dataset.
-     *
      */
-    otError Set(const Dataset &aDataset);
+    void Set(const Dataset &aDataset);
 
-#if OPENTHREAD_FTD
     /**
      * This method sets the Dataset.
      *
      * @param[in]  aDataset  The input Dataset.
      *
-     * @retval OT_ERROR_NONE  Successfully set the Dataset.
+     * @retval OT_ERROR_NONE          Successfully set the Dataset.
+     * @retval OT_ERROR_INVALID_ARGS  Dataset is missing Active and/or Pending Timestamp.
      *
      */
     otError Set(const otOperationalDataset &aDataset);
-#endif
 
     /**
      * This method removes a TLV from the Dataset.
@@ -222,23 +221,22 @@ public:
     /**
      * This method applies the Active or Pending Dataset to the Thread interface.
      *
-     * @param[in]  aInstance  A reference to the OpenThread instance.
+     * @param[in]  aInstance           A reference to the OpenThread instance.
+     * @param[out] aIsMasterKeyUpdated A pointer to where to place whether master key was updated.
      *
      * @retval OT_ERROR_NONE   Successfully applied configuration.
      * @retval OT_ERROR_PARSE  The dataset has at least one TLV with invalid format.
      *
      */
-    otError ApplyConfiguration(Instance &aInstance) const;
+    otError ApplyConfiguration(Instance &aInstance, bool *aIsMasterKeyUpdated = NULL) const;
 
     /**
      * This method converts a Pending Dataset to an Active Dataset.
      *
      * This method removes the Delay Timer and Pending Timestamp TLVs
      *
-     * @retval OT_ERROR_NONE  Successfully converted to Active Dataset.
-     *
      */
-    otError ConvertToActive(void);
+    void ConvertToActive(void);
 
 private:
     void Remove(uint8_t *aStart, uint8_t aLength);

@@ -37,7 +37,7 @@
 
 #include <openthread/platform/random.h>
 
-#include "coap/coap_header.hpp"
+#include "coap/coap_message.hpp"
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
 #include "common/instance.hpp"
@@ -68,27 +68,26 @@ otError PanIdQueryClient::SendQuery(uint16_t                            aPanId,
 {
     ThreadNetif &                     netif = GetNetif();
     otError                           error = OT_ERROR_NONE;
-    Coap::Header                      header;
     MeshCoP::CommissionerSessionIdTlv sessionId;
-    MeshCoP::ChannelMask0Tlv          channelMask;
+    MeshCoP::ChannelMaskTlv           channelMask;
     MeshCoP::PanIdTlv                 panId;
     Ip6::MessageInfo                  messageInfo;
-    Message *                         message = NULL;
+    Coap::Message *                   message = NULL;
 
     VerifyOrExit(netif.GetCommissioner().IsActive(), error = OT_ERROR_INVALID_STATE);
+    VerifyOrExit((message = MeshCoP::NewMeshCoPMessage(netif.GetCoap())) != NULL, error = OT_ERROR_NO_BUFS);
 
-    header.Init(aAddress.IsMulticast() ? OT_COAP_TYPE_NON_CONFIRMABLE : OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST);
-    header.SetToken(Coap::Header::kDefaultTokenLength);
-    header.AppendUriPathOptions(OT_URI_PATH_PANID_QUERY);
-    header.SetPayloadMarker();
-
-    VerifyOrExit((message = MeshCoP::NewMeshCoPMessage(netif.GetCoap(), header)) != NULL, error = OT_ERROR_NO_BUFS);
+    message->Init(aAddress.IsMulticast() ? OT_COAP_TYPE_NON_CONFIRMABLE : OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST);
+    message->SetToken(Coap::Message::kDefaultTokenLength);
+    message->AppendUriPathOptions(OT_URI_PATH_PANID_QUERY);
+    message->SetPayloadMarker();
 
     sessionId.Init();
     sessionId.SetCommissionerSessionId(netif.GetCommissioner().GetSessionId());
     SuccessOrExit(error = message->Append(&sessionId, sizeof(sessionId)));
 
     channelMask.Init();
+    channelMask.SetChannelPage(OT_RADIO_CHANNEL_PAGE);
     channelMask.SetMask(aChannelMask);
     SuccessOrExit(error = message->Append(&channelMask, sizeof(channelMask)));
 
@@ -102,7 +101,7 @@ otError PanIdQueryClient::SendQuery(uint16_t                            aPanId,
     messageInfo.SetInterfaceId(netif.GetInterfaceId());
     SuccessOrExit(error = netif.GetCoap().SendMessage(*message, messageInfo));
 
-    otLogInfoMeshCoP(GetInstance(), "sent panid query");
+    otLogInfoMeshCoP("sent panid query");
 
     mCallback = aCallback;
     mContext  = aContext;
@@ -117,41 +116,37 @@ exit:
     return error;
 }
 
-void PanIdQueryClient::HandleConflict(void *               aContext,
-                                      otCoapHeader *       aHeader,
-                                      otMessage *          aMessage,
-                                      const otMessageInfo *aMessageInfo)
+void PanIdQueryClient::HandleConflict(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    static_cast<PanIdQueryClient *>(aContext)->HandleConflict(*static_cast<Coap::Header *>(aHeader),
-                                                              *static_cast<Message *>(aMessage),
+    static_cast<PanIdQueryClient *>(aContext)->HandleConflict(*static_cast<Coap::Message *>(aMessage),
                                                               *static_cast<const Ip6::MessageInfo *>(aMessageInfo));
 }
 
-void PanIdQueryClient::HandleConflict(Coap::Header &aHeader, Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
+void PanIdQueryClient::HandleConflict(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
-    ThreadNetif &            netif = GetNetif();
-    MeshCoP::PanIdTlv        panId;
-    MeshCoP::ChannelMask0Tlv channelMask;
-    Ip6::MessageInfo         responseInfo(aMessageInfo);
+    ThreadNetif &           netif = GetNetif();
+    MeshCoP::PanIdTlv       panId;
+    MeshCoP::ChannelMaskTlv channelMask;
+    Ip6::MessageInfo        responseInfo(aMessageInfo);
 
-    VerifyOrExit(aHeader.GetType() == OT_COAP_TYPE_CONFIRMABLE && aHeader.GetCode() == OT_COAP_CODE_POST);
+    VerifyOrExit(aMessage.GetType() == OT_COAP_TYPE_CONFIRMABLE && aMessage.GetCode() == OT_COAP_CODE_POST);
 
-    otLogInfoMeshCoP(GetInstance(), "received panid conflict");
+    otLogInfoMeshCoP("received panid conflict");
 
     SuccessOrExit(MeshCoP::Tlv::GetTlv(aMessage, MeshCoP::Tlv::kPanId, sizeof(panId), panId));
     VerifyOrExit(panId.IsValid());
 
     SuccessOrExit(MeshCoP::Tlv::GetTlv(aMessage, MeshCoP::Tlv::kChannelMask, sizeof(channelMask), channelMask));
-    VerifyOrExit(channelMask.IsValid());
+    VerifyOrExit(channelMask.IsValid() && (channelMask.GetChannelPage() == OT_RADIO_CHANNEL_PAGE));
 
     if (mCallback != NULL)
     {
         mCallback(panId.GetPanId(), channelMask.GetMask(), mContext);
     }
 
-    SuccessOrExit(netif.GetCoap().SendEmptyAck(aHeader, responseInfo));
+    SuccessOrExit(netif.GetCoap().SendEmptyAck(aMessage, responseInfo));
 
-    otLogInfoMeshCoP(GetInstance(), "sent panid query conflict response");
+    otLogInfoMeshCoP("sent panid query conflict response");
 
 exit:
     return;

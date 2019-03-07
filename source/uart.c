@@ -38,12 +38,12 @@
 
 #include <utils/code_utils.h>
 #include "openthread/platform/uart.h"
-#include "openthread/types.h"
+#include "openthread/error.h"
 
 #include "fsl_clock.h"
 #include "fsl_lpuart.h"
 #include "fsl_port.h"
-//#define ENABLE_RTT
+#define ENABLE_RTT
 enum
 {
     kPlatformClock     = 32000000,

@@ -35,7 +35,7 @@
 #ifndef PLATFORM_H_
 #define PLATFORM_H_
 
-#include <openthread/types.h>
+#include <openthread/error.h>
 
 #ifdef __cplusplus
 extern "C" {

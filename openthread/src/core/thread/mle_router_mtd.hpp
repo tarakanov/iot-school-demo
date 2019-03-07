@@ -59,6 +59,8 @@ public:
     {
     }
 
+    bool IsRouterRoleEnabled(void) const { return false; }
+
     bool IsSingleton(void) { return false; }
 
     otError BecomeRouter(ThreadStatusTlv::Status) { return OT_ERROR_NOT_CAPABLE; }
@@ -88,7 +90,7 @@ public:
 
     void    RestoreChildren(void) {}
     otError RemoveStoredChild(uint16_t) { return OT_ERROR_NOT_IMPLEMENTED; }
-    otError StoreChild(uint16_t) { return OT_ERROR_NOT_IMPLEMENTED; }
+    otError StoreChild(const Child &) { return OT_ERROR_NOT_IMPLEMENTED; }
 
     Neighbor *GetNeighbor(uint16_t aAddress) { return Mle::GetNeighbor(aAddress); }
     Neighbor *GetNeighbor(const Mac::ExtAddress &aAddress) { return Mle::GetNeighbor(aAddress); }
@@ -128,7 +130,7 @@ public:
     bool IsSleepyChildSubscribed(const Ip6::Address &, Child &) { return false; }
 
 private:
-    otError HandleDetachStart(void) { return OT_ERROR_NONE; }
+    void    HandleDetachStart(void) {}
     otError HandleChildStart(AttachMode) { return OT_ERROR_NONE; }
     otError HandleLinkRequest(const Message &, const Ip6::MessageInfo &) { return OT_ERROR_DROP; }
     otError HandleLinkAccept(const Message &, const Ip6::MessageInfo &, uint32_t) { return OT_ERROR_DROP; }
@@ -140,11 +142,14 @@ private:
     otError HandleChildUpdateRequest(const Message &, const Ip6::MessageInfo &, uint32_t) { return OT_ERROR_DROP; }
     otError HandleChildUpdateResponse(const Message &, const Ip6::MessageInfo &, uint32_t) { return OT_ERROR_DROP; }
     otError HandleDataRequest(const Message &, const Ip6::MessageInfo &) { return OT_ERROR_DROP; }
-    otError HandleNetworkDataUpdateRouter(void) { return OT_ERROR_NONE; }
+    void    HandleNetworkDataUpdateRouter(void) {}
     otError HandleDiscoveryRequest(const Message &, const Ip6::MessageInfo &) { return OT_ERROR_DROP; }
     void    HandlePartitionChange(void) {}
     void    StopAdvertiseTimer(void) {}
     otError ProcessRouteTlv(const RouteTlv &) { return OT_ERROR_NONE; }
+#if OPENTHREAD_CONFIG_ENABLE_TIME_SYNC
+    otError HandleTimeSync(const Message &, const Ip6::MessageInfo &) { return OT_ERROR_DROP; }
+#endif
 
     ChildTable  mChildTable;
     RouterTable mRouterTable;

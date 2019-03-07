@@ -58,21 +58,28 @@
 
 #include "openthread/platform/misc.h"
 
-#define assert(cond)                              \
-    do                                            \
-    {                                             \
-        if (!(cond))                              \
-        {                                         \
-            otPlatAssertFail(__FILE__, __LINE__); \
-            while (1)                             \
-            {                                     \
-            }                                     \
-        }                                         \
+/**
+ * Allow the build system to provide a custom file name.
+ *
+ */
+#ifndef FILE_NAME
+#define FILE_NAME __FILE__
+#endif
+
+#define assert(cond)                               \
+    do                                             \
+    {                                              \
+        if (!(cond))                               \
+        {                                          \
+            otPlatAssertFail(FILE_NAME, __LINE__); \
+            while (1)                              \
+            {                                      \
+            }                                      \
+        }                                          \
     } while (0)
 
 #else
 
-#ifndef assert
 #define assert(cond)  \
     do                \
     {                 \
@@ -83,7 +90,6 @@
             }         \
         }             \
     } while (0)
-#endif // assert
 
 #endif
 

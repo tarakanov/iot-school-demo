@@ -45,7 +45,7 @@
 #include "nrf_error.h"
 
 #include <openthread/udp.h>
-#include <openthread/openthread.h>
+#include <openthread/error.h>
 
 #include <stdint.h>
 #include <string.h>

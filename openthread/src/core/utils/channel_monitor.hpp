@@ -36,7 +36,6 @@
 
 #include "openthread-core-config.h"
 
-#include <openthread/types.h>
 #include <openthread/platform/radio.h>
 
 #include "common/locator.hpp"
@@ -194,10 +193,9 @@ private:
         kMaxOccupancy      = 0xffff,
     };
 
-    void        RestartTimer(void);
     static void HandleTimer(Timer &aTimer);
     void        HandleTimer(void);
-    static void HandleEnergyScanResult(void *aContext, otEnergyScanResult *aResult);
+    static void HandleEnergyScanResult(Instance &aInstance, otEnergyScanResult *aResult);
     void        HandleEnergyScanResult(otEnergyScanResult *aResult);
     void        LogResults(void);
 

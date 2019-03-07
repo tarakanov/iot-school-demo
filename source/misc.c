@@ -29,7 +29,7 @@
 #include "openthread/platform/misc.h"
 #include "fsl_device_registers.h"
 #include <stdint.h>
-#include "openthread/types.h"
+#include "openthread/error.h"
 
 void otPlatReset(otInstance *aInstance)
 {

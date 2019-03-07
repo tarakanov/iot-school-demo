@@ -38,8 +38,6 @@
 
 #include "utils/wrap_string.h"
 
-#include <openthread/types.h>
-
 #include "common/encoding.hpp"
 #include "common/message.hpp"
 
@@ -56,16 +54,6 @@ OT_TOOL_PACKED_BEGIN
 class Tlv
 {
 public:
-    /**
-     * Default constructor.
-     *
-     */
-    Tlv(void)
-        : mType(0)
-        , mLength(0)
-    {
-    }
-
     /**
      * This method returns the Type value.
      *
@@ -104,7 +92,7 @@ public:
      * @returns The total size include Type, Length, and Value fields.
      *
      */
-    uint8_t GetSize(void) const { return sizeof(Tlv) + mLength; }
+    uint16_t GetSize(void) const { return sizeof(Tlv) + mLength; }
 
     /**
      * This method returns a pointer to the Value.
@@ -180,7 +168,7 @@ public:
      * @retval OT_ERROR_NOT_FOUND  Could not find the TLV with Type @p aType.
      *
      */
-    static otError GetValueOffset(const Message &aMesasge, uint8_t aType, uint16_t &aOffset, uint16_t &aLength);
+    static otError GetValueOffset(const Message &aMessage, uint8_t aType, uint16_t &aOffset, uint16_t &aLength);
 
 protected:
     /**

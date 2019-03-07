@@ -62,7 +62,7 @@
 /* #undef NO_MINUS_C_MINUS_O */
 
 /* Define to 1 if you want to enable CoAP to an application. */
-#define OPENTHREAD_ENABLE_APPLICATION_COAP 0
+#define OPENTHREAD_ENABLE_APPLICATION_COAP 1
 
 /* Define to 1 if you want to enable Border Router */
 #define OPENTHREAD_ENABLE_BORDER_ROUTER 0
@@ -80,13 +80,13 @@
 #define OPENTHREAD_ENABLE_CHILD_SUPERVISION 0
 
 /* Define to 1 to enable the commissioner role. */
-#define OPENTHREAD_ENABLE_COMMISSIONER 0
+#define OPENTHREAD_ENABLE_COMMISSIONER 1
 
 /* Define to 1 if you want to enable DHCPv6 Client */
-#define OPENTHREAD_ENABLE_DHCP6_CLIENT 0
+#define OPENTHREAD_ENABLE_DHCP6_CLIENT 1
 
 /* Define to 1 if you want to enable DHCPv6 Server */
-#define OPENTHREAD_ENABLE_DHCP6_SERVER 0
+#define OPENTHREAD_ENABLE_DHCP6_SERVER 1
 
 /* Define to 1 if you want to use diagnostics module */
 #define OPENTHREAD_ENABLE_DIAG 1

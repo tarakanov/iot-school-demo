@@ -68,7 +68,8 @@ public:
     /**
      * This method starts the Commissioner service.
      *
-     * @retval OT_ERROR_NONE  Successfully started the Commissioner service.
+     * @retval OT_ERROR_NONE           Successfully started the Commissioner service.
+     * @retval OT_ERROR_INVALID_STATE  Commissioner is already started.
      *
      */
     otError Start(void);
@@ -76,7 +77,8 @@ public:
     /**
      * This method stops the Commissioner service.
      *
-     * @retval OT_ERROR_NONE  Successfully stopped the Commissioner service.
+     * @retval OT_ERROR_NONE           Successfully stopped the Commissioner service.
+     * @retval OT_ERROR_INVALID_STATE  Commissioner is already stopped.
      *
      */
     otError Stop(void);
@@ -94,8 +96,9 @@ public:
      * @param[in]  aPSKd         A pointer to the PSKd.
      * @param[in]  aTimeout      A time after which a Joiner is automatically removed, in seconds.
      *
-     * @retval OT_ERROR_NONE     Successfully added the Joiner.
-     * @retval OT_ERROR_NO_BUFS  No buffers available to add the Joiner.
+     * @retval OT_ERROR_NONE           Successfully added the Joiner.
+     * @retval OT_ERROR_NO_BUFS        No buffers available to add the Joiner.
+     * @retval OT_ERROR_INVALID_STATE  Commissioner service is not started.
      *
      */
     otError AddJoiner(const Mac::ExtAddress *aEui64, const char *aPSKd, uint32_t aTimeout);
@@ -106,11 +109,24 @@ public:
      * @param[in]  aEui64          A pointer to the Joiner's IEEE EUI-64 or NULL for any Joiner.
      * @param[in]  aDelay          The delay to remove Joiner (in seconds).
      *
-     * @retval OT_ERROR_NONE       Successfully added the Joiner.
-     * @retval OT_ERROR_NOT_FOUND  The Joiner specified by @p aEui64 was not found.
+     * @retval OT_ERROR_NONE           Successfully added the Joiner.
+     * @retval OT_ERROR_NOT_FOUND      The Joiner specified by @p aEui64 was not found.
+     * @retval OT_ERROR_INVALID_STATE  Commissioner service is not started.
      *
      */
     otError RemoveJoiner(const Mac::ExtAddress *aEui64, uint32_t aDelay);
+
+    /**
+     * This method gets the Provisioning URL.
+     *
+     * @param[out]   aLength     A reference to `uint16_t` to return the length (number of chars) in the URL string.
+     *
+     * Note that the returned URL string buffer is not necessarily null-terminated.
+     *
+     * @returns A pointer to char buffer containing the URL string.
+     *
+     */
+    const char *GetProvisioningUrl(uint16_t &aLength) const;
 
     /**
      * This method sets the Provisioning URL.
@@ -146,7 +162,7 @@ public:
      *
      * @retval OT_COMMISSIONER_STATE_DISABLED  Commissioner disabled.
      * @retval OT_COMMISSIONER_STATE_PETITION  Becoming the commissioner.
-     * @retval OT_COMIMSSIONER_STATE_ACTIVE    Commissioner enabled.
+     * @retval OT_COMMISSIONER_STATE_ACTIVE    Commissioner enabled.
      *
      */
     otCommissionerState GetState(void) const;
@@ -157,8 +173,9 @@ public:
      * @param[in]  aTlvs        A pointer to Commissioning Data TLVs.
      * @param[in]  aLength      The length of requested TLVs in bytes.
      *
-     * @retval OT_ERROR_NONE     Send MGMT_COMMISSIONER_GET successfully.
-     * @retval OT_ERROR_FAILED   Send MGMT_COMMISSIONER_GET fail.
+     * @retval OT_ERROR_NONE           Send MGMT_COMMISSIONER_GET successfully.
+     * @retval OT_ERROR_NO_BUFS        Insufficient buffer space to send.
+     * @retval OT_ERROR_INVALID_STATE  Commissioner service is not started.
      *
      */
     otError SendMgmtCommissionerGetRequest(const uint8_t *aTlvs, uint8_t aLength);
@@ -170,8 +187,9 @@ public:
      * @param[in]  aTlvs        A pointer to user specific Commissioning Data TLVs.
      * @param[in]  aLength      The length of user specific TLVs in bytes.
      *
-     * @retval OT_ERROR_NONE     Send MGMT_COMMISSIONER_SET successfully.
-     * @retval OT_ERROR_FAILED   Send MGMT_COMMISSIONER_SET fail.
+     * @retval OT_ERROR_NONE           Send MGMT_COMMISSIONER_SET successfully.
+     * @retval OT_ERROR_NO_BUFS        Insufficient buffer space to send.
+     * @retval OT_ERROR_INVALID_STATE  Commissioner service is not started.
      *
      */
     otError SendMgmtCommissionerSetRequest(const otCommissioningDataset &aDataset,
@@ -192,10 +210,10 @@ public:
      * @retval OT_ERROR_INVALID_ARGS  If the length of passphrase is out of range.
      *
      */
-    static otError GeneratePSKc(const char *   aPassPhrase,
-                                const char *   aNetworkName,
-                                const uint8_t *aExtPanId,
-                                uint8_t *      aPSKc);
+    static otError GeneratePSKc(const char *           aPassPhrase,
+                                const char *           aNetworkName,
+                                const otExtendedPanId &aExtPanId,
+                                uint8_t *              aPSKc);
 
     /**
      * This method returns a reference to the AnnounceBeginClient instance.
@@ -243,61 +261,40 @@ private:
     void UpdateJoinerExpirationTimer(void);
 
     static void HandleMgmtCommissionerSetResponse(void *               aContext,
-                                                  otCoapHeader *       aHeader,
                                                   otMessage *          aMessage,
                                                   const otMessageInfo *aMessageInfo,
                                                   otError              aResult);
-    void        HandleMgmtCommissisonerSetResponse(Coap::Header *          aHeader,
-                                                   Message *               aMessage,
-                                                   const Ip6::MessageInfo *aMessageInfo,
-                                                   otError                 aResult);
+    void        HandleMgmtCommissionerSetResponse(Coap::Message *         aMessage,
+                                                  const Ip6::MessageInfo *aMessageInfo,
+                                                  otError                 aResult);
     static void HandleMgmtCommissionerGetResponse(void *               aContext,
-                                                  otCoapHeader *       aHeader,
                                                   otMessage *          aMessage,
                                                   const otMessageInfo *aMessageInfo,
                                                   otError              aResult);
-    void        HandleMgmtCommissisonerGetResponse(Coap::Header *          aHeader,
-                                                   Message *               aMessage,
-                                                   const Ip6::MessageInfo *aMessageInfo,
-                                                   otError                 aResult);
+    void        HandleMgmtCommissionerGetResponse(Coap::Message *         aMessage,
+                                                  const Ip6::MessageInfo *aMessageInfo,
+                                                  otError                 aResult);
     static void HandleLeaderPetitionResponse(void *               aContext,
-                                             otCoapHeader *       aHeader,
                                              otMessage *          aMessage,
                                              const otMessageInfo *aMessageInfo,
                                              otError              aResult);
-    void        HandleLeaderPetitionResponse(Coap::Header *          aHeader,
-                                             Message *               aMessage,
-                                             const Ip6::MessageInfo *aMessageInfo,
-                                             otError                 aResult);
+    void HandleLeaderPetitionResponse(Coap::Message *aMessage, const Ip6::MessageInfo *aMessageInfo, otError aResult);
     static void HandleLeaderKeepAliveResponse(void *               aContext,
-                                              otCoapHeader *       aHeader,
                                               otMessage *          aMessage,
                                               const otMessageInfo *aMessageInfo,
                                               otError              aResult);
-    void        HandleLeaderKeepAliveResponse(Coap::Header *          aHeader,
-                                              Message *               aMessage,
-                                              const Ip6::MessageInfo *aMessageInfo,
-                                              otError                 aResult);
+    void HandleLeaderKeepAliveResponse(Coap::Message *aMessage, const Ip6::MessageInfo *aMessageInfo, otError aResult);
 
-    static void HandleRelayReceive(void *               aContext,
-                                   otCoapHeader *       aHeader,
-                                   otMessage *          aMessage,
-                                   const otMessageInfo *aMessageInfo);
-    void        HandleRelayReceive(Coap::Header &aHeader, Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
+    static void HandleRelayReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
+    void        HandleRelayReceive(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
 
-    static void HandleDatasetChanged(void *               aContext,
-                                     otCoapHeader *       aHeader,
-                                     otMessage *          aMessage,
-                                     const otMessageInfo *aMessageInfo);
-    void        HandleDatasetChanged(Coap::Header &aHeader, Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
+    static void HandleDatasetChanged(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
+    void        HandleDatasetChanged(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
 
-    static void HandleJoinerFinalize(void *               aContext,
-                                     otCoapHeader *       aHeader,
-                                     otMessage *          aMessage,
-                                     const otMessageInfo *aMessageInfo);
-    void        HandleJoinerFinalize(Coap::Header &aHeader, Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
+    static void HandleJoinerFinalize(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
+    void        HandleJoinerFinalize(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
 
-    void SendJoinFinalizeResponse(const Coap::Header &aRequestHeader, StateTlv::State aState);
+    void SendJoinFinalizeResponse(const Coap::Message &aRequest, StateTlv::State aState);
 
     static otError SendRelayTransmit(void *aContext, Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     otError        SendRelayTransmit(Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
@@ -305,8 +302,6 @@ private:
     otError SendCommissionerSet(void);
     otError SendPetition(void);
     otError SendKeepAlive(void);
-
-    otCommissionerState mState;
 
     struct Joiner
     {
@@ -334,6 +329,10 @@ private:
     AnnounceBeginClient mAnnounceBegin;
     EnergyScanClient    mEnergyScan;
     PanIdQueryClient    mPanIdQuery;
+
+    Ip6::NetifUnicastAddress mCommissionerAloc;
+
+    otCommissionerState mState;
 };
 
 } // namespace MeshCoP

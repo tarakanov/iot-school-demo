@@ -103,19 +103,59 @@ class Ip6 : public InstanceLocator
 public:
     enum
     {
-        kDefaultHopLimit   = 64,
-        kMaxDatagramLength = 1280,
+        kDefaultHopLimit   = OPENTHREAD_CONFIG_IPV6_DEFAULT_HOP_LIMIT,
+        kMaxDatagramLength = OPENTHREAD_CONFIG_IPV6_DEFAULT_MAX_DATAGRAM,
     };
 
     /**
      * This method allocates a new message buffer from the buffer pool.
      *
+     * @note If @p aSettings is 'NULL', the link layer security is enabled and the message priority is set to
+     *       OT_MESSAGE_PRIORITY_NORMAL by default.
+     *
      * @param[in]  aReserved  The number of header bytes to reserve following the IPv6 header.
+     * @param[in]  aSettings  A pointer to the message settings or NULL to set default settings.
      *
      * @returns A pointer to the message or NULL if insufficient message buffers are available.
      *
      */
-    Message *NewMessage(uint16_t aReserved);
+    Message *NewMessage(uint16_t aReserved, const otMessageSettings *aSettings = NULL);
+
+    /**
+     * This method allocates a new message buffer from the buffer pool and writes the IPv6 datagram to the message.
+     *
+     * @note If @p aSettings is NULL, the link layer security is enabled and the message priority is obtained from
+     *       IPv6 message itself.
+     *       If @p aSettings is not NULL, the @p aSetting->mPriority is ignored and obtained from IPv6 message itself.
+     *
+     * @param[in]  aData        A pointer to the IPv6 datagram buffer.
+     * @param[in]  aDataLength  The size of the IPV6 datagram buffer pointed by @p aData.
+     * @param[in]  aSettings    A pointer to the message settings or NULL to set default settings.
+     *
+     * @returns A pointer to the message or NULL if malformed IPv6 header or insufficient message buffers are available.
+     *
+     */
+    Message *NewMessage(const uint8_t *aData, uint16_t aDataLength, const otMessageSettings *aSettings);
+
+    /**
+     * This method converts the message priority level to IPv6 DSCP value.
+     *
+     * @param[in]  aPriority  The message priority level.
+     *
+     * @returns The IPv6 DSCP value.
+     *
+     */
+    static uint8_t PriorityToDscp(uint8_t aPriority);
+
+    /**
+     * This method converts the IPv6 DSCP value to message priority level.
+     *
+     * @param[in]  aDscp  The IPv6 DSCP value.
+     *
+     * @returns The message priority level.
+     *
+     */
+    static uint8_t DscpToPriority(uint8_t aDscp);
 
     /**
      * This constructor initializes the object.
@@ -363,7 +403,7 @@ public:
     Udp &GetUdp(void) { return mUdp; }
 
     /**
-     * This method returns a reference to the UDMPL message processing controller instance.
+     * This method returns a reference to the MPL message processing controller instance.
      *
      * @returns A reference to the Mpl instance.
      *
@@ -379,8 +419,15 @@ public:
     static const char *IpProtoToString(IpProto aIpProto);
 
 private:
+    enum
+    {
+        kDefaultIp6MessagePriority = Message::kPriorityNormal,
+    };
+
     static void HandleSendQueue(Tasklet &aTasklet);
     void        HandleSendQueue(void);
+
+    static otError GetDatagramPriority(const uint8_t *aData, uint16_t aDataLen, uint8_t &aPriority);
 
     otError ProcessReceiveCallback(const Message &    aMessage,
                                    const MessageInfo &aMessageInfo,

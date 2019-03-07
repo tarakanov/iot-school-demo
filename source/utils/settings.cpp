@@ -40,7 +40,7 @@
 #include <openthread-core-config.h>
 
 #include "openthread/platform/settings.h"
-#include "openthread/types.h"
+//#include "openthread/types.h"
 
 #include <utils/code_utils.h>
 

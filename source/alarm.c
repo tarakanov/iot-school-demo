@@ -37,7 +37,7 @@
 #include "fsl_pit.h"
 #include <stdint.h>
 
-#include "openthread/openthread.h"
+//#include "openthread/openthread.h"
 #include "openthread/platform/alarm-milli.h"
 #include "openthread/platform/diag.h"
 

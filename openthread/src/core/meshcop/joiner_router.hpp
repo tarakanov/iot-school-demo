@@ -36,10 +36,8 @@
 
 #include "openthread-core-config.h"
 
-#include <openthread/types.h>
-
 #include "coap/coap.hpp"
-#include "coap/coap_header.hpp"
+#include "coap/coap_message.hpp"
 #include "common/locator.hpp"
 #include "common/message.hpp"
 #include "common/notifier.hpp"
@@ -77,10 +75,8 @@ public:
      *
      * @param[in]  The Joiner UDP Port number.
      *
-     * @retval OT_ERROR_NONE    Successfully set the Joiner UDP Port.
-     *
      */
-    otError SetJoinerUdpPort(uint16_t aJoinerUdpPort);
+    void SetJoinerUdpPort(uint16_t aJoinerUdpPort);
 
 private:
     enum
@@ -88,36 +84,27 @@ private:
         kDelayJoinEnt = 50, ///< milliseconds
     };
 
-    static void HandleStateChanged(Notifier::Callback &aCallback, uint32_t aFlags);
-    void        HandleStateChanged(uint32_t aFlags);
+    static void HandleStateChanged(Notifier::Callback &aCallback, otChangedFlags aFlags);
+    void        HandleStateChanged(otChangedFlags aFlags);
 
     static void HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
     void        HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
 
-    static void HandleRelayTransmit(void *               aContext,
-                                    otCoapHeader *       aHeader,
-                                    otMessage *          aMessage,
-                                    const otMessageInfo *aMessageInfo);
-    void        HandleRelayTransmit(Coap::Header &aHeader, Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
+    static void HandleRelayTransmit(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
+    void        HandleRelayTransmit(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
 
     static void HandleJoinerEntrustResponse(void *               aContext,
-                                            otCoapHeader *       aHeader,
                                             otMessage *          aMessage,
                                             const otMessageInfo *aMessageInfo,
                                             otError              result);
-    void        HandleJoinerEntrustResponse(Coap::Header *          aHeader,
-                                            Message *               aMessage,
-                                            const Ip6::MessageInfo *aMessageInfo,
-                                            otError                 result);
+    void HandleJoinerEntrustResponse(Coap::Message *aMessage, const Ip6::MessageInfo *aMessageInfo, otError result);
 
     static void HandleTimer(Timer &aTimer);
     void        HandleTimer(void);
 
     otError DelaySendingJoinerEntrust(const Ip6::MessageInfo &aMessageInfo, const JoinerRouterKekTlv &aKek);
     void    SendDelayedJoinerEntrust(void);
-    otError SendJoinerEntrust(Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
-
-    otError GetBorderAgentRloc(uint16_t &aRloc);
+    otError SendJoinerEntrust(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
 
     Ip6::UdpSocket mSocket;
     Coap::Resource mRelayTransmit;

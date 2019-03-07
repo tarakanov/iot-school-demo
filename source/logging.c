@@ -35,6 +35,7 @@
 #include <openthread-core-config.h>
 #include <openthread/config.h>
 #include <openthread/platform/logging.h>
+#include <openthread/platform/toolchain.h>
 
 #if (ENABLE_RTT_DEBUG) || (ENABLE_RTT_CONSOLE)
 #include <utils/logging_rtt.h>

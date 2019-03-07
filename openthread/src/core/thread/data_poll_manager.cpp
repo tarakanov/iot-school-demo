@@ -71,7 +71,7 @@ otError DataPollManager::StartPolling(void)
     otError error = OT_ERROR_NONE;
 
     VerifyOrExit(!mEnabled, error = OT_ERROR_ALREADY);
-    VerifyOrExit((GetNetif().GetMle().GetDeviceMode() & Mle::ModeTlv::kModeFFD) == 0, error = OT_ERROR_INVALID_STATE);
+    VerifyOrExit(!GetNetif().GetMle().IsRxOnWhenIdle(), error = OT_ERROR_INVALID_STATE);
 
     mEnabled = true;
     ScheduleNextPoll(kRecalculatePollPeriod);
@@ -127,7 +127,7 @@ exit:
     switch (error)
     {
     case OT_ERROR_NONE:
-        otLogDebgMac(GetInstance(), "Sending data poll");
+        otLogDebgMac("Sending data poll");
 
         if (mNoBufferRetxMode == true)
         {
@@ -142,12 +142,12 @@ exit:
         break;
 
     case OT_ERROR_INVALID_STATE:
-        otLogWarnMac(GetInstance(), "Data poll tx requested while data polling was not enabled!");
+        otLogWarnMac("Data poll tx requested while data polling was not enabled!");
         StopPolling();
         break;
 
     case OT_ERROR_ALREADY:
-        otLogDebgMac(GetInstance(), "Data poll tx requested when a previous data request still in send queue.");
+        otLogDebgMac("Data poll tx requested when a previous data request still in send queue.");
         ScheduleNextPoll(kUsePreviousPollPeriod);
         break;
 
@@ -161,8 +161,15 @@ exit:
     return error;
 }
 
-void DataPollManager::SetExternalPollPeriod(uint32_t aPeriod)
+otError DataPollManager::SetExternalPollPeriod(uint32_t aPeriod)
 {
+    otError error = OT_ERROR_NONE;
+
+    if (aPeriod != 0 && aPeriod < OPENTHREAD_CONFIG_MINIMUM_POLL_PERIOD)
+    {
+        ExitNow(error = OT_ERROR_INVALID_ARGS);
+    }
+
     if (mExternalPollPeriod != aPeriod)
     {
         mExternalPollPeriod = aPeriod;
@@ -172,6 +179,9 @@ void DataPollManager::SetExternalPollPeriod(uint32_t aPeriod)
             ScheduleNextPoll(kRecalculatePollPeriod);
         }
     }
+
+exit:
+    return error;
 }
 
 uint32_t DataPollManager::GetKeepAlivePollPeriod(void) const
@@ -213,14 +223,20 @@ void DataPollManager::HandlePollSent(otError aError)
             shouldRecalculatePollPeriod = true;
         }
 
-        otLogInfoMac(GetInstance(), "Sent data poll");
+        otLogInfoMac("Sent data poll");
 
+        break;
+
+    case OT_ERROR_CHANNEL_ACCESS_FAILURE:
+    case OT_ERROR_ABORT:
+        mRetxMode                   = true;
+        shouldRecalculatePollPeriod = true;
         break;
 
     default:
         mPollTxFailureCounter++;
 
-        otLogInfoMac(GetInstance(), "Failed to send data poll, error:%s, retx:%d/%d", otThreadErrorToString(aError),
+        otLogInfoMac("Failed to send data poll, error:%s, retx:%d/%d", otThreadErrorToString(aError),
                      mPollTxFailureCounter, kMaxPollRetxAttempts);
 
         if (mPollTxFailureCounter < kMaxPollRetxAttempts)
@@ -260,7 +276,7 @@ void DataPollManager::HandlePollTimeout(void)
 
     mPollTimeoutCounter++;
 
-    otLogInfoMac(GetInstance(), "Data poll timeout, retry:%d/%d", mPollTimeoutCounter, kQuickPollsAfterTimeout);
+    otLogInfoMac("Data poll timeout, retry:%d/%d", mPollTimeoutCounter, kQuickPollsAfterTimeout);
 
     if (mPollTimeoutCounter < kQuickPollsAfterTimeout)
     {
